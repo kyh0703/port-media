@@ -9,6 +9,7 @@ type Config struct {
 	OpenAI        OpenAIConfig        `mapstructure:"openai"`
 	Database      DatabaseConfig      `mapstructure:"database"`
 	Redis         RedisConfig         `mapstructure:"redis"`
+	Events        EventsConfig        `mapstructure:"events"`
 	Realtime      RealtimeConfig      `mapstructure:"realtime"`
 	Observability ObservabilityConfig `mapstructure:"observability"`
 }
@@ -59,6 +60,12 @@ type RedisConfig struct {
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 	DB       int    `mapstructure:"db"`
+}
+
+type EventsConfig struct {
+	ConversationStreamEnabled bool   `mapstructure:"conversation_stream_enabled"`
+	ConversationStreamName    string `mapstructure:"conversation_stream_name"`
+	ConversationStreamMaxLen  int64  `mapstructure:"conversation_stream_max_len"`
 }
 
 type RealtimeConfig struct {

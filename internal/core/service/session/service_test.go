@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -131,6 +132,17 @@ func (f *fakeMediaSessionStateRepository) Delete(ctx context.Context, sessionID 
 	_ = ctx
 	f.deleted = append(f.deleted, sessionID)
 	return nil
+}
+
+type fakeConversationEventPublisher struct {
+	events []entity.ConversationEvent
+	err    error
+}
+
+func (f *fakeConversationEventPublisher) Publish(ctx context.Context, event entity.ConversationEvent) error {
+	_ = ctx
+	f.events = append(f.events, event)
+	return f.err
 }
 
 func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
@@ -475,7 +487,7 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	core, observed := observer.New(zap.InfoLevel)
-	svc := newService(rooms, runtime, states, media, provider, defaultRealtimeControlConfig(), zap.New(core))
+	svc := newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.New(core))
 
 	res, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -732,6 +744,241 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	}
 	if status.RecentRealtimeEvents[0].Type != "response.done" {
 		t.Fatalf("status RecentRealtimeEvents[0].Type = %q, want response.done", status.RecentRealtimeEvents[0].Type)
+	}
+}
+
+func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
+	rooms := newMemoryRoomRepositoryForTest()
+	runtime := newMemoryRoomRepositoryForTest()
+	media := &fakeOfferAcceptor{}
+	provider := &fakeRealtimeCallCreator{}
+	states := &fakeMediaSessionStateRepository{}
+	publisher := &fakeConversationEventPublisher{}
+	svc := NewServiceWithConfigLoggerAndPublisher(
+		rooms,
+		runtime,
+		states,
+		media,
+		provider,
+		publisher,
+		&configs.Config{},
+		zap.NewNop(),
+	)
+
+	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err != nil {
+		t.Fatalf("AcceptOffer() error = %v", err)
+	}
+
+	media.createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
+		SessionID:     media.createdInput.SessionID,
+		ParticipantID: media.createdInput.ParticipantID,
+		Role:          media.createdInput.Role,
+		Label:         media.createdInput.DataChannelLabel,
+		Payload:       `{"type":"conversation.item.input_audio_transcription.completed","event_id":"evt_1","transcript":"hello","token":"drop","nested":{"authorization":"drop","value":"keep"}}`,
+	})
+
+	if len(publisher.events) != 1 {
+		t.Fatalf("published events = %d, want 1", len(publisher.events))
+	}
+	event := publisher.events[0]
+	if event.SchemaVersion != 1 {
+		t.Fatalf("SchemaVersion = %d, want 1", event.SchemaVersion)
+	}
+	if event.EventID != "evt_1" {
+		t.Fatalf("EventID = %q, want evt_1", event.EventID)
+	}
+	if event.ConversationID != vo.ConversationID("conversation-1") {
+		t.Fatalf("ConversationID = %q, want conversation-1", event.ConversationID)
+	}
+	if event.SessionID != vo.SessionID("session-1") {
+		t.Fatalf("SessionID = %q, want session-1", event.SessionID)
+	}
+	if event.RoomID == "" {
+		t.Fatal("RoomID is empty")
+	}
+	if event.ProviderCallID != "rtc_123" {
+		t.Fatalf("ProviderCallID = %q, want rtc_123", event.ProviderCallID)
+	}
+	if event.ProviderEventType != "conversation.item.input_audio_transcription.completed" {
+		t.Fatalf("ProviderEventType = %q", event.ProviderEventType)
+	}
+	if event.OccurredAt.IsZero() {
+		t.Fatal("OccurredAt is zero")
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+		t.Fatalf("payload Unmarshal() error = %v", err)
+	}
+	if payload["transcript"] != "hello" {
+		t.Fatalf("payload transcript = %v, want hello", payload["transcript"])
+	}
+	if _, ok := payload["token"]; ok {
+		t.Fatal("payload token was not removed")
+	}
+	nested, ok := payload["nested"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload nested = %#v, want object", payload["nested"])
+	}
+	if _, ok := nested["authorization"]; ok {
+		t.Fatal("payload nested authorization was not removed")
+	}
+	if nested["value"] != "keep" {
+		t.Fatalf("payload nested value = %v, want keep", nested["value"])
+	}
+}
+
+func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
+	rooms := newMemoryRoomRepositoryForTest()
+	runtime := newMemoryRoomRepositoryForTest()
+	media := &fakeOfferAcceptor{}
+	provider := &fakeRealtimeCallCreator{}
+	states := &fakeMediaSessionStateRepository{}
+	publisher := &fakeConversationEventPublisher{}
+	svc := NewServiceWithConfigLoggerAndPublisher(
+		rooms,
+		runtime,
+		states,
+		media,
+		provider,
+		publisher,
+		&configs.Config{},
+		zap.NewNop(),
+	)
+
+	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err != nil {
+		t.Fatalf("AcceptOffer() error = %v", err)
+	}
+
+	media.createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
+		SessionID:     media.createdInput.SessionID,
+		ParticipantID: media.createdInput.ParticipantID,
+		Role:          media.createdInput.Role,
+		Label:         media.createdInput.DataChannelLabel,
+		Payload:       `{"type":"response.audio.delta","delta":"chunk"}`,
+	})
+
+	if len(publisher.events) != 0 {
+		t.Fatalf("published events = %d, want 0", len(publisher.events))
+	}
+	if len(states.states) != 2 {
+		t.Fatalf("state saves = %d, want 2", len(states.states))
+	}
+	state := states.states[1]
+	if state.LastRealtimeEventType != "response.audio.delta" {
+		t.Fatalf("LastRealtimeEventType = %q, want response.audio.delta", state.LastRealtimeEventType)
+	}
+}
+
+func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
+	rooms := newMemoryRoomRepositoryForTest()
+	runtime := newMemoryRoomRepositoryForTest()
+	media := &fakeOfferAcceptor{}
+	provider := &fakeRealtimeCallCreator{}
+	states := &fakeMediaSessionStateRepository{}
+	publisher := &fakeConversationEventPublisher{}
+	svc := NewServiceWithConfigLoggerAndPublisher(
+		rooms,
+		runtime,
+		states,
+		media,
+		provider,
+		publisher,
+		&configs.Config{},
+		zap.NewNop(),
+	)
+
+	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err != nil {
+		t.Fatalf("AcceptOffer() error = %v", err)
+	}
+
+	message := rtc.DataChannelMessage{
+		SessionID:     media.createdInput.SessionID,
+		ParticipantID: media.createdInput.ParticipantID,
+		Role:          media.createdInput.Role,
+		Label:         media.createdInput.DataChannelLabel,
+		Payload:       `{"type":"response.output_text.done","text":"hello"}`,
+	}
+	media.createdInput.OnDataChannelMessage(message)
+	media.createdInput.OnDataChannelMessage(message)
+
+	if len(publisher.events) != 2 {
+		t.Fatalf("published events = %d, want 2", len(publisher.events))
+	}
+	if publisher.events[0].EventID == "" {
+		t.Fatal("fallback EventID is empty")
+	}
+	if publisher.events[0].EventID != publisher.events[1].EventID {
+		t.Fatalf("fallback EventID changed: %q != %q", publisher.events[0].EventID, publisher.events[1].EventID)
+	}
+}
+
+func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
+	rooms := newMemoryRoomRepositoryForTest()
+	runtime := newMemoryRoomRepositoryForTest()
+	media := &fakeOfferAcceptor{}
+	provider := &fakeRealtimeCallCreator{}
+	states := &fakeMediaSessionStateRepository{}
+	publisher := &fakeConversationEventPublisher{err: errors.New("publish failed")}
+	observed, logs := observer.New(zap.WarnLevel)
+	svc := NewServiceWithConfigLoggerAndPublisher(
+		rooms,
+		runtime,
+		states,
+		media,
+		provider,
+		publisher,
+		&configs.Config{},
+		zap.New(observed),
+	)
+
+	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err != nil {
+		t.Fatalf("AcceptOffer() error = %v", err)
+	}
+
+	media.createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
+		SessionID:     media.createdInput.SessionID,
+		ParticipantID: media.createdInput.ParticipantID,
+		Role:          media.createdInput.Role,
+		Label:         media.createdInput.DataChannelLabel,
+		Payload:       `{"type":"response.output_text.done","text":"hello"}`,
+	})
+
+	if len(publisher.events) != 1 {
+		t.Fatalf("published events = %d, want 1 attempt", len(publisher.events))
+	}
+	if len(states.states) != 2 {
+		t.Fatalf("state saves = %d, want 2", len(states.states))
+	}
+	if states.states[1].LastRealtimeEventType != "response.output_text.done" {
+		t.Fatalf("LastRealtimeEventType = %q, want response.output_text.done", states.states[1].LastRealtimeEventType)
+	}
+	if logs.FilterMessage("media_conversation_event_publish_failed").Len() != 1 {
+		t.Fatalf("publish failure logs = %d, want 1", logs.FilterMessage("media_conversation_event_publish_failed").Len())
 	}
 }
 

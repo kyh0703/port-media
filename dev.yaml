@@ -46,6 +46,11 @@ redis:
   password: ""
   db: 0
 
+events:
+  conversation_stream_enabled: true
+  conversation_stream_name: media:conversation-events:v1
+  conversation_stream_max_len: 0
+
 realtime:
   stun_urls:
     - stun:stun.l.google.com:19302

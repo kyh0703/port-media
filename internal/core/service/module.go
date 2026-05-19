@@ -10,7 +10,7 @@ var Module = fx.Module(
 	"service",
 	fx.Provide(
 		fx.Annotate(
-			sessionservice.NewServiceWithConfigAndLogger,
+			sessionservice.NewServiceWithConfigLoggerAndPublisher,
 			fx.As(new(sessionservice.Service)),
 			fx.As(new(usecase.SessionUsecase)),
 		),

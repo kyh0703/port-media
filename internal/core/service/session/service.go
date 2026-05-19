@@ -2,7 +2,9 @@ package session
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -36,6 +38,7 @@ type service struct {
 	states   repository.MediaSessionStateRepository
 	media    rtc.PeerConnectionFactory
 	provider openai.RealtimeCallManager
+	events   repository.ConversationEventPublisher
 	log      *zap.Logger
 	now      func() time.Time
 	locks    sync.Map
@@ -55,7 +58,7 @@ func NewService(
 	media rtc.PeerConnectionFactory,
 	provider openai.RealtimeCallManager,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, defaultRealtimeControlConfig(), zap.NewNop())
+	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.NewNop())
 }
 
 func NewServiceWithConfig(
@@ -66,7 +69,7 @@ func NewServiceWithConfig(
 	provider openai.RealtimeCallManager,
 	cfg *configs.Config,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, realtimeControlConfigFromConfig(cfg), zap.NewNop())
+	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromConfig(cfg), zap.NewNop())
 }
 
 func NewServiceWithConfigAndLogger(
@@ -78,7 +81,20 @@ func NewServiceWithConfigAndLogger(
 	cfg *configs.Config,
 	log *zap.Logger,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, realtimeControlConfigFromConfig(cfg), log)
+	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromConfig(cfg), log)
+}
+
+func NewServiceWithConfigLoggerAndPublisher(
+	rooms repository.RoomRepository,
+	runtime repository.RoomRuntimeRepository,
+	states repository.MediaSessionStateRepository,
+	media rtc.PeerConnectionFactory,
+	provider openai.RealtimeCallManager,
+	events repository.ConversationEventPublisher,
+	cfg *configs.Config,
+	log *zap.Logger,
+) Service {
+	return newService(rooms, runtime, states, media, provider, events, realtimeControlConfigFromConfig(cfg), log)
 }
 
 func newService(
@@ -87,11 +103,15 @@ func newService(
 	states repository.MediaSessionStateRepository,
 	media rtc.PeerConnectionFactory,
 	provider openai.RealtimeCallManager,
+	events repository.ConversationEventPublisher,
 	realtime realtimeControlConfig,
 	log *zap.Logger,
 ) Service {
 	if log == nil {
 		log = zap.NewNop()
+	}
+	if events == nil {
+		events = noopConversationEventPublisher{}
 	}
 	return &service{
 		rooms:    rooms,
@@ -99,6 +119,7 @@ func newService(
 		states:   states,
 		media:    media,
 		provider: provider,
+		events:   events,
 		log:      log,
 		now:      time.Now,
 		realtime: realtime,
@@ -309,6 +330,7 @@ func (s *service) handleOpenAIDataChannelMessage(message rtc.DataChannelMessage)
 		eventType,
 		existingState.RecentRealtimeEvents,
 	))
+	s.publishConversationEvent(ctx, room, eventType, message.Payload, now)
 	s.logRoomEvent("media_realtime_event_recorded", room,
 		zap.String("participant_id", string(message.ParticipantID)),
 		zap.String("participant_role", string(message.Role)),
@@ -737,16 +759,25 @@ func (s *service) mediaSessionStateWithRealtimeEvent(
 }
 
 func realtimeEventType(payload string) string {
+	eventType, _ := realtimeEventEnvelopeFields(payload)
+	if eventType == "" {
+		return "unknown"
+	}
+	return eventType
+}
+
+func realtimeEventEnvelopeFields(payload string) (string, string) {
 	var event struct {
-		Type string `json:"type"`
+		Type    string `json:"type"`
+		EventID string `json:"event_id"`
 	}
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
-		return "unknown"
+		return "", ""
 	}
 	if strings.TrimSpace(event.Type) == "" {
-		return "unknown"
+		return "", strings.TrimSpace(event.EventID)
 	}
-	return strings.TrimSpace(event.Type)
+	return strings.TrimSpace(event.Type), strings.TrimSpace(event.EventID)
 }
 
 func formatOptionalTime(value time.Time) string {
@@ -789,6 +820,141 @@ func openAIProviderCallID(room entity.Room) string {
 		}
 	}
 	return ""
+}
+
+func (s *service) publishConversationEvent(
+	ctx context.Context,
+	room entity.Room,
+	eventType string,
+	payload string,
+	occurredAt time.Time,
+) {
+	if !isPublishableConversationEvent(eventType) {
+		return
+	}
+
+	eventID := realtimeEventID(payload)
+	sanitizedPayload := sanitizeRealtimePayload(payload)
+	providerCallID := openAIProviderCallID(room)
+	if eventID == "" {
+		eventID = fallbackConversationEventID(room.SessionID, providerCallID, eventType, sanitizedPayload)
+	}
+
+	event := entity.ConversationEvent{
+		SchemaVersion:     1,
+		EventID:           eventID,
+		ConversationID:    room.ConversationID,
+		SessionID:         room.SessionID,
+		RoomID:            room.ID,
+		ProviderCallID:    providerCallID,
+		ProviderEventType: eventType,
+		OccurredAt:        occurredAt,
+		Payload:           sanitizedPayload,
+	}
+	if err := s.events.Publish(ctx, event); err != nil {
+		s.log.Warn("media_conversation_event_publish_failed",
+			zap.Error(err),
+			zap.String("session_id", string(event.SessionID)),
+			zap.String("conversation_id", string(event.ConversationID)),
+			zap.String("room_id", string(event.RoomID)),
+			zap.String("provider_call_id", event.ProviderCallID),
+			zap.String("provider_event_type", event.ProviderEventType),
+		)
+	}
+}
+
+func realtimeEventID(payload string) string {
+	_, eventID := realtimeEventEnvelopeFields(payload)
+	return eventID
+}
+
+func fallbackConversationEventID(
+	sessionID vo.SessionID,
+	providerCallID string,
+	eventType string,
+	payload string,
+) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		string(sessionID),
+		providerCallID,
+		eventType,
+		payload,
+	}, "\x00")))
+	return fmt.Sprintf("media-%x", sum[:])
+}
+
+func sanitizeRealtimePayload(payload string) string {
+	var decoded any
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		return payload
+	}
+	sanitized := sanitizeRealtimeValue(decoded)
+	body, err := json.Marshal(sanitized)
+	if err != nil {
+		return payload
+	}
+	return string(body)
+}
+
+func sanitizeRealtimeValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, item := range typed {
+			if isSecretPayloadField(key) {
+				continue
+			}
+			out[key] = sanitizeRealtimeValue(item)
+		}
+		return out
+	case []any:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, sanitizeRealtimeValue(item))
+		}
+		return out
+	default:
+		return typed
+	}
+}
+
+func isSecretPayloadField(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "api_key", "authorization", "token", "secret", "client_secret":
+		return true
+	default:
+		return false
+	}
+}
+
+func isPublishableConversationEvent(eventType string) bool {
+	_, ok := conversationEventAllowlist[eventType]
+	return ok
+}
+
+var conversationEventAllowlist = map[string]struct{}{
+	"session.created":           {},
+	"conversation.item.created": {},
+	"conversation.item.input_audio_transcription.completed": {},
+	"conversation.item.input_audio_transcription.failed":    {},
+	"response.output_audio_transcript.done":                 {},
+	"response.output_text.done":                             {},
+	"response.function_call_arguments.done":                 {},
+	"response.mcp_call_arguments.done":                      {},
+	"response.mcp_call.completed":                           {},
+	"response.mcp_call.failed":                              {},
+	"mcp_list_tools.completed":                              {},
+	"mcp_list_tools.failed":                                 {},
+	"response.output_item.done":                             {},
+	"error":                                                 {},
+}
+
+type noopConversationEventPublisher struct{}
+
+func (noopConversationEventPublisher) Publish(ctx context.Context, event entity.ConversationEvent) error {
+	_ = ctx
+	_ = event
+	return nil
 }
 
 func coalesceUserID(userID string, fallback string) string {
