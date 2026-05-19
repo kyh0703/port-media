@@ -1,22 +1,70 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/driver/sqliteshim"
 )
 
-func TestMigrateSchemaAddsRealtimeEventColumnsToExistingRoomsTable(t *testing.T) {
-	sqldb, err := sql.Open(sqliteshim.ShimName, "file:test-migrate-schema?mode=memory&cache=shared")
-	if err != nil {
-		t.Fatalf("sql.Open() error = %v", err)
-	}
+func TestConfigureSQLiteEnablesWALForFileDatabase(t *testing.T) {
+	sqldb := newTestSQLDB(t, "file:"+filepath.Join(t.TempDir(), "media.db")+"?cache=shared")
 	defer func() {
 		_ = sqldb.Close()
 	}()
 
-	_, err = sqldb.Exec(`
+	if err := configureSQLite(context.Background(), sqldb, 5*time.Second); err != nil {
+		t.Fatalf("configureSQLite() error = %v", err)
+	}
+
+	var journalMode string
+	if err := sqldb.QueryRowContext(context.Background(), "PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		t.Fatalf("PRAGMA journal_mode error = %v", err)
+	}
+	if !strings.EqualFold(journalMode, "wal") {
+		t.Fatalf("journal_mode = %q, want wal", journalMode)
+	}
+
+	var busyTimeout int
+	if err := sqldb.QueryRowContext(context.Background(), "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		t.Fatalf("PRAGMA busy_timeout error = %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("busy_timeout = %d, want 5000", busyTimeout)
+	}
+}
+
+func TestEnsureSchemaCreatesRoomsTableAndIndexFromBunModel(t *testing.T) {
+	db := newTestDB(t, "file:test-ensure-schema?mode=memory&cache=shared")
+	defer func() {
+		_ = db.Close()
+	}()
+
+	if err := ensureSchema(context.Background(), db); err != nil {
+		t.Fatalf("ensureSchema() error = %v", err)
+	}
+
+	if exists, err := columnExists(context.Background(), db, "rooms", "session_id"); err != nil || !exists {
+		t.Fatalf("session_id exists=%v err=%v, want true nil", exists, err)
+	}
+	if exists, err := indexExists(context.Background(), db, "idx_rooms_session_id"); err != nil || !exists {
+		t.Fatalf("idx_rooms_session_id exists=%v err=%v, want true nil", exists, err)
+	}
+}
+
+func TestMigrateSchemaAddsRealtimeEventColumnsToExistingRoomsTable(t *testing.T) {
+	sqldb := newTestSQLDB(t, "file:test-migrate-schema?mode=memory&cache=shared")
+	defer func() {
+		_ = sqldb.Close()
+	}()
+
+	_, err := sqldb.Exec(`
 CREATE TABLE rooms (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL,
@@ -30,34 +78,61 @@ CREATE TABLE rooms (
 		t.Fatalf("create old rooms table error = %v", err)
 	}
 
-	if err := migrateSchema(sqldb); err != nil {
+	db := bun.NewDB(sqldb, sqlitedialect.New())
+	if err := migrateSchema(context.Background(), db); err != nil {
 		t.Fatalf("migrateSchema() error = %v", err)
 	}
 
-	if exists, err := columnExists(sqldb, "rooms", "last_realtime_event_type"); err != nil || !exists {
+	if exists, err := columnExists(context.Background(), db, "rooms", "last_realtime_event_type"); err != nil || !exists {
 		t.Fatalf("last_realtime_event_type exists=%v err=%v, want true nil", exists, err)
 	}
-	if exists, err := columnExists(sqldb, "rooms", "last_realtime_event_at"); err != nil || !exists {
+	if exists, err := columnExists(context.Background(), db, "rooms", "last_realtime_event_at"); err != nil || !exists {
 		t.Fatalf("last_realtime_event_at exists=%v err=%v, want true nil", exists, err)
 	}
 }
 
 func TestMigrateSchemaIsIdempotent(t *testing.T) {
-	sqldb, err := sql.Open(sqliteshim.ShimName, "file:test-migrate-schema-idempotent?mode=memory&cache=shared")
+	db := newTestDB(t, "file:test-migrate-schema-idempotent?mode=memory&cache=shared")
+	defer func() {
+		_ = db.Close()
+	}()
+
+	if err := ensureSchema(context.Background(), db); err != nil {
+		t.Fatalf("first ensureSchema() error = %v", err)
+	}
+	if err := ensureSchema(context.Background(), db); err != nil {
+		t.Fatalf("second ensureSchema() error = %v", err)
+	}
+}
+
+func newTestDB(t *testing.T, dsn string) *bun.DB {
+	t.Helper()
+
+	return bun.NewDB(newTestSQLDB(t, dsn), sqlitedialect.New())
+}
+
+func newTestSQLDB(t *testing.T, dsn string) *sql.DB {
+	t.Helper()
+
+	sqldb, err := sql.Open(sqliteshim.ShimName, dsn)
 	if err != nil {
 		t.Fatalf("sql.Open() error = %v", err)
 	}
-	defer func() {
-		_ = sqldb.Close()
-	}()
+	return sqldb
+}
 
-	if _, err := sqldb.Exec(Schema); err != nil {
-		t.Fatalf("exec schema error = %v", err)
+func indexExists(ctx context.Context, db *bun.DB, name string) (bool, error) {
+	var found string
+	err := db.QueryRowContext(
+		ctx,
+		"SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+		name,
+	).Scan(&found)
+	if err == sql.ErrNoRows {
+		return false, nil
 	}
-	if err := migrateSchema(sqldb); err != nil {
-		t.Fatalf("first migrateSchema() error = %v", err)
+	if err != nil {
+		return false, err
 	}
-	if err := migrateSchema(sqldb); err != nil {
-		t.Fatalf("second migrateSchema() error = %v", err)
-	}
+	return found == name, nil
 }

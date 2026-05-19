@@ -49,6 +49,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("openai.realtime_data_channel_label", "oai-events")
 	v.SetDefault("openai.realtime_initial_events", []string{})
 	v.SetDefault("database.dsn", "file:portfoilo_media.db?cache=shared")
+	v.SetDefault("database.busy_timeout", "5s")
 	v.SetDefault("database.max_open_conns", 10)
 	v.SetDefault("database.max_idle_conns", 5)
 	v.SetDefault("redis.addr", "localhost:6379")

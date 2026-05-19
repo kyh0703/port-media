@@ -1,10 +1,14 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/kyh0703/portfoilo-media/configs"
+	"github.com/kyh0703/portfoilo-media/internal/core/domain/model"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/driver/sqliteshim"
@@ -19,28 +23,71 @@ func NewDB(cfg *configs.Config) *bun.DB {
 	sqldb.SetMaxOpenConns(cfg.Database.MaxOpenConns)
 	sqldb.SetMaxIdleConns(cfg.Database.MaxIdleConns)
 
-	if _, err := sqldb.Exec(Schema); err != nil {
-		panic(err)
-	}
-	if err := migrateSchema(sqldb); err != nil {
+	ctx := context.Background()
+	if err := configureSQLite(ctx, sqldb, cfg.Database.BusyTimeout); err != nil {
 		panic(err)
 	}
 
-	return bun.NewDB(sqldb, sqlitedialect.New())
+	db := bun.NewDB(sqldb, sqlitedialect.New())
+	if err := ensureSchema(ctx, db); err != nil {
+		panic(err)
+	}
+
+	return db
 }
 
-func migrateSchema(db *sql.DB) error {
-	if err := ensureColumn(db, "rooms", "last_realtime_event_type", "TEXT"); err != nil {
-		return err
+func configureSQLite(ctx context.Context, db *sql.DB, busyTimeout time.Duration) error {
+	var journalMode string
+	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode = WAL").Scan(&journalMode); err != nil {
+		return fmt.Errorf("enable sqlite WAL journal mode: %w", err)
 	}
-	if err := ensureColumn(db, "rooms", "last_realtime_event_at", "TIMESTAMP"); err != nil {
+	if !strings.EqualFold(journalMode, "wal") {
+		return fmt.Errorf("enable sqlite WAL journal mode: got %q", journalMode)
+	}
+	if busyTimeout > 0 {
+		timeoutMs := busyTimeout.Milliseconds()
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA busy_timeout = %d", timeoutMs)); err != nil {
+			return fmt.Errorf("set sqlite busy timeout: %w", err)
+		}
+	}
+	return nil
+}
+
+func ensureSchema(ctx context.Context, db *bun.DB) error {
+	if _, err := db.NewCreateTable().
+		Model((*model.Room)(nil)).
+		IfNotExists().
+		Exec(ctx); err != nil {
+		return fmt.Errorf("create rooms table: %w", err)
+	}
+
+	if _, err := db.NewCreateIndex().
+		Model((*model.Room)(nil)).
+		Index("idx_rooms_session_id").
+		Column("session_id").
+		IfNotExists().
+		Exec(ctx); err != nil {
+		return fmt.Errorf("create rooms session index: %w", err)
+	}
+
+	if err := migrateSchema(ctx, db); err != nil {
 		return err
 	}
 	return nil
 }
 
-func ensureColumn(db *sql.DB, table string, column string, definition string) error {
-	exists, err := columnExists(db, table, column)
+func migrateSchema(ctx context.Context, db *bun.DB) error {
+	if err := ensureColumn(ctx, db, "rooms", "last_realtime_event_type", "TEXT"); err != nil {
+		return err
+	}
+	if err := ensureColumn(ctx, db, "rooms", "last_realtime_event_at", "TIMESTAMP"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ensureColumn(ctx context.Context, db *bun.DB, table string, column string, definition string) error {
+	exists, err := columnExists(ctx, db, table, column)
 	if err != nil {
 		return err
 	}
@@ -48,14 +95,17 @@ func ensureColumn(db *sql.DB, table string, column string, definition string) er
 		return nil
 	}
 
-	if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition)); err != nil {
+	if _, err := db.NewAddColumn().
+		Table(table).
+		ColumnExpr(fmt.Sprintf("%s %s", column, definition)).
+		Exec(ctx); err != nil {
 		return fmt.Errorf("add column %s.%s: %w", table, column, err)
 	}
 	return nil
 }
 
-func columnExists(db *sql.DB, table string, column string) (bool, error) {
-	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+func columnExists(ctx context.Context, db *bun.DB, table string, column string) (bool, error) {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		return false, fmt.Errorf("inspect table %s: %w", table, err)
 	}

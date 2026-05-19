@@ -36,6 +36,7 @@ openai:
 
 database:
   dsn: file:portfoilo_media.db?cache=shared
+  busy_timeout: 5s
   max_open_conns: 10
   max_idle_conns: 5
 
