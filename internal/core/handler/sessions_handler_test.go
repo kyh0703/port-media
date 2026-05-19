@@ -175,7 +175,7 @@ func TestSessionsHandlerEndsSessionWithMediaToken(t *testing.T) {
 	}
 }
 
-func TestSessionsHandlerAcceptsOfferAsSDP(t *testing.T) {
+func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
 	usecase := &fakeSessionUsecase{}
 	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: auth.MediaToken{
@@ -192,7 +192,7 @@ func TestSessionsHandlerAcceptsOfferAsSDP(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/sessions/session-1/offer",
+		"/sessions/session-1/join",
 		strings.NewReader("offer-sdp"),
 	)
 	req.Header.Set("Authorization", "Bearer media-token")
@@ -240,7 +240,7 @@ func TestSessionsHandlerAcceptsOfferAsSDP(t *testing.T) {
 	}
 }
 
-func TestSessionsHandlerAcceptsListenerOfferMode(t *testing.T) {
+func TestSessionsHandlerAcceptsListenerJoinMode(t *testing.T) {
 	usecase := &fakeSessionUsecase{}
 	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: auth.MediaToken{
@@ -257,7 +257,7 @@ func TestSessionsHandlerAcceptsListenerOfferMode(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/sessions/session-1/offer?mode=listener",
+		"/sessions/session-1/join?mode=listener",
 		strings.NewReader("offer-sdp"),
 	)
 	req.Header.Set("Authorization", "Bearer media-token")
@@ -341,7 +341,7 @@ func TestSessionsHandlerLeavesParticipantWithMediaToken(t *testing.T) {
 	}
 }
 
-func TestSessionsHandlerRejectsOfferWithoutMediaToken(t *testing.T) {
+func TestSessionsHandlerRejectsJoinWithoutMediaToken(t *testing.T) {
 	usecase := &fakeSessionUsecase{}
 	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{err: auth.ErrMissingMediaToken})
 
@@ -352,7 +352,7 @@ func TestSessionsHandlerRejectsOfferWithoutMediaToken(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/sessions/session-1/offer",
+		"/sessions/session-1/join",
 		strings.NewReader("offer-sdp"),
 	)
 	req.Header.Set("Content-Type", "application/sdp")
@@ -405,7 +405,7 @@ func TestSessionsHandlerRejectsSessionMismatch(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/sessions/session-1/offer",
+		"/sessions/session-1/join",
 		strings.NewReader("offer-sdp"),
 	)
 	req.Header.Set("Authorization", "Bearer media-token")

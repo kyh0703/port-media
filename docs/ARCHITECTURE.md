@@ -70,7 +70,7 @@
 1. Client asks `dubu-api` to create a realtime session.
 2. `dubu-api` verifies the user's JWT and creates a session/conversation record.
 3. `dubu-api` returns `sessionId`, `conversationId`, `mediaServerUrl`, and a short-lived `mediaToken` to the client.
-4. Client creates an SDP offer and posts it to `/api/v1/sessions/:sessionId/offer?mode=publisher` or `/api/v1/sessions/:sessionId/offer?mode=listener` with `Authorization: Bearer <mediaToken>`.
+4. Client creates an SDP offer and posts it to `/api/v1/sessions/:sessionId/join?mode=publisher` or `/api/v1/sessions/:sessionId/join?mode=listener` with `Authorization: Bearer <mediaToken>`.
 5. `portfoilo-media` validates the media token and creates or joins one SFU room for the session.
 6. `portfoilo-media` waits for local ICE gathering and returns an SDP answer to the client.
 7. Client sets the SDP answer and establishes WebRTC media with `portfoilo-media`.

@@ -21,7 +21,7 @@ import (
 	pionwebrtc "github.com/pion/webrtc/v4"
 )
 
-func TestOfferEndpointSmokeWithPionClient(t *testing.T) {
+func TestJoinEndpointSmokeWithPionClient(t *testing.T) {
 	cfg := &configs.Config{
 		Realtime: configs.RealtimeConfig{
 			ICEGatheringTimeout: 500 * time.Millisecond,
@@ -57,7 +57,7 @@ func TestOfferEndpointSmokeWithPionClient(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/sessions/session-1/offer",
+		"/sessions/session-1/join",
 		strings.NewReader(offerSDP),
 	)
 	req.Header.Set("Authorization", "Bearer media-token")

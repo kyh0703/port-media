@@ -24,7 +24,7 @@ func (h *SessionsHandler) Table() []Mapper {
 	return []Mapper{
 		{Method: fiber.MethodPost, Path: "/sessions", Handler: []fiber.Handler{h.Create}},
 		{Method: fiber.MethodGet, Path: "/sessions/:sessionId/status", Handler: []fiber.Handler{h.GetStatus}},
-		{Method: fiber.MethodPost, Path: "/sessions/:sessionId/offer", Handler: []fiber.Handler{h.AcceptOffer}},
+		{Method: fiber.MethodPost, Path: "/sessions/:sessionId/join", Handler: []fiber.Handler{h.Join}},
 		{Method: fiber.MethodPost, Path: "/sessions/:sessionId/participants/:participantId/leave", Handler: []fiber.Handler{h.LeaveParticipant}},
 		{Method: fiber.MethodPost, Path: "/sessions/:sessionId/end", Handler: []fiber.Handler{h.End}},
 	}
@@ -63,7 +63,7 @@ func (h *SessionsHandler) GetStatus(c *fiber.Ctx) error {
 	return c.JSON(response.OK(res))
 }
 
-func (h *SessionsHandler) AcceptOffer(c *fiber.Ctx) error {
+func (h *SessionsHandler) Join(c *fiber.Ctx) error {
 	claims, err := h.verifySessionToken(c)
 	if err != nil {
 		return err
@@ -71,11 +71,11 @@ func (h *SessionsHandler) AcceptOffer(c *fiber.Ctx) error {
 
 	sdp := string(c.Body())
 	if sdp == "" {
-		return exception.New(exception.CodeBadRequest, "empty SDP offer", fiber.StatusBadRequest)
+		return exception.New(exception.CodeBadRequest, "empty join SDP", fiber.StatusBadRequest)
 	}
 	audioMode, err := parseAudioMode(c.Query("mode", string(sessiondto.AudioModePublisher)))
 	if err != nil {
-		return exception.New(exception.CodeBadRequest, "invalid offer mode", fiber.StatusBadRequest)
+		return exception.New(exception.CodeBadRequest, "invalid join mode", fiber.StatusBadRequest)
 	}
 
 	res, err := h.session.AcceptOffer(c.Context(), sessiondto.AcceptOfferRequest{
@@ -160,6 +160,6 @@ func parseAudioMode(mode string) (sessiondto.AudioMode, error) {
 	case "listener", "listen_only", "listen-only":
 		return sessiondto.AudioModeListener, nil
 	default:
-		return "", exception.New(exception.CodeBadRequest, "invalid offer mode", fiber.StatusBadRequest)
+		return "", exception.New(exception.CodeBadRequest, "invalid join mode", fiber.StatusBadRequest)
 	}
 }

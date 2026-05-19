@@ -72,7 +72,7 @@ func (testHandler) Table() []handler.Mapper {
 	return []handler.Mapper{
 		{
 			Method: fiber.MethodPost,
-			Path:   "/sessions/:sessionId/offer",
+			Path:   "/sessions/:sessionId/join",
 			Handler: []fiber.Handler{func(c *fiber.Ctx) error {
 				return c.SendStatus(fiber.StatusNoContent)
 			}},
@@ -80,7 +80,7 @@ func (testHandler) Table() []handler.Mapper {
 	}
 }
 
-func TestNewFiberHandlesCORSPreflightForOffer(t *testing.T) {
+func TestNewFiberHandlesCORSPreflightForJoin(t *testing.T) {
 	app := NewFiber(FiberParams{
 		Config: &configs.Config{
 			App: configs.AppConfig{Name: "test"},
@@ -98,7 +98,7 @@ func TestNewFiberHandlesCORSPreflightForOffer(t *testing.T) {
 		Handlers:      []handler.Handler{testHandler{}},
 	})
 
-	req := httptest.NewRequest(http.MethodOptions, "/api/v1/sessions/session-1/offer", nil)
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/sessions/session-1/join", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
 	req.Header.Set("Access-Control-Request-Headers", "authorization,content-type")
@@ -125,7 +125,7 @@ func TestNewFiberHandlesCORSPreflightForOffer(t *testing.T) {
 	}
 }
 
-func TestNewFiberExposesOfferResponseHeaders(t *testing.T) {
+func TestNewFiberExposesJoinResponseHeaders(t *testing.T) {
 	app := NewFiber(FiberParams{
 		Config: &configs.Config{
 			App: configs.AppConfig{Name: "test"},
@@ -143,7 +143,7 @@ func TestNewFiberExposesOfferResponseHeaders(t *testing.T) {
 		Handlers:      []handler.Handler{testHandler{}},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/session-1/offer", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/session-1/join", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 
 	res, err := app.Test(req)
