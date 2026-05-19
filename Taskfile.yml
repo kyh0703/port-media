@@ -1,0 +1,42 @@
+version: "3"
+
+vars:
+  TARGET: portfoilo-media
+  CMD: ./cmd/app
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  build:
+    desc: Build the media server binary
+    cmds:
+      - go build -o bin/{{.TARGET}} {{.CMD}}
+
+  run:
+    desc: Run the media server locally
+    cmds:
+      - go run {{.CMD}}
+
+  test:
+    desc: Run all Go tests
+    cmds:
+      - go test ./...
+
+  tidy:
+    desc: Tidy Go module dependencies
+    cmds:
+      - go mod tidy
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  air:
+    desc: Run the local Air watcher
+    cmds:
+      - air
