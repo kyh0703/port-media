@@ -1,0 +1,56 @@
+app:
+  name: portfoilo-media
+  env: dev
+  version: 0.1.0
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  read_timeout: 10s
+  write_timeout: 10s
+  cors:
+    allowed_origins:
+      - http://localhost:3000
+      - http://localhost:5173
+    allowed_methods:
+      - GET
+      - POST
+      - OPTIONS
+    allowed_headers:
+      - Authorization
+      - Content-Type
+    expose_headers:
+      - X-Room-Id
+      - X-Participant-Id
+
+log:
+  level: debug
+  development: true
+
+openai:
+  realtime_base_url: https://api.openai.com
+  realtime_model: gpt-realtime-2
+  realtime_data_channel_label: oai-events
+  realtime_initial_events: []
+  api_key: replace-with-openai-api-key
+
+database:
+  dsn: file:portfoilo_media.db?cache=shared
+  max_open_conns: 10
+  max_idle_conns: 5
+
+redis:
+  addr: localhost:6379
+  username: ""
+  password: ""
+  db: 0
+
+realtime:
+  stun_urls:
+    - stun:stun.l.google.com:19302
+  room_idle_timeout: 2m
+  ice_gathering_timeout: 5s
+  realtime_event_history_limit: 10
+
+observability:
+  metrics_enabled: true

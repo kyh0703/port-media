@@ -1,0 +1,10 @@
+.worktrees/
+.env
+.env.*
+!.env.example
+bin/
+tmp/
+dist/
+coverage.out
+*.test
+*.log
