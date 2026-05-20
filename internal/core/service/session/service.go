@@ -15,6 +15,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/openai"
 	rtc "github.com/kyh0703/portfoilo-media/internal/pkg/webrtc"
 	"go.uber.org/zap"
@@ -189,13 +190,18 @@ func (s *service) AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferReq
 	unlock := s.lockSession(sessionID)
 	defer unlock()
 
-	conversationID := vo.ConversationID(req.ConversationID)
 	room, found, err := s.runtime.FindBySessionID(ctx, sessionID)
 	if err != nil {
 		return sessiondto.AcceptOfferResponse{}, err
 	}
 	if !found {
-		room = entity.NewRoom(vo.NewRoomID(), sessionID, conversationID, now)
+		room, found, err = s.rooms.FindBySessionID(ctx, sessionID)
+		if err != nil {
+			return sessiondto.AcceptOfferResponse{}, err
+		}
+		if !found {
+			return sessiondto.AcceptOfferResponse{}, usecase.ErrSessionNotFound
+		}
 	}
 	publishAudio := req.PublishesAudio()
 	room.SetUserID(req.UserID, now)

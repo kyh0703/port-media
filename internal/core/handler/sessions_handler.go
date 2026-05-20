@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -54,6 +55,9 @@ func (h *SessionsHandler) GetStatus(c *fiber.Ctx) error {
 		SessionID: claims.SessionID,
 	})
 	if err != nil {
+		if errors.Is(err, usecase.ErrSessionNotFound) {
+			return exception.New(exception.CodeNotFound, "media session not found", fiber.StatusNotFound)
+		}
 		return err
 	}
 	if !found {

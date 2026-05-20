@@ -2,9 +2,12 @@ package usecase
 
 import (
 	"context"
+	"errors"
 
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 )
+
+var ErrSessionNotFound = errors.New("media session not found")
 
 type SessionUsecase interface {
 	CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error)

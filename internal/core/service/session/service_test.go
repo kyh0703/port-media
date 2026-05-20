@@ -11,6 +11,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/openai"
 	rtc "github.com/kyh0703/portfoilo-media/internal/pkg/webrtc"
 	"go.uber.org/zap"
@@ -145,6 +146,17 @@ func (f *fakeConversationEventPublisher) Publish(ctx context.Context, event enti
 	return f.err
 }
 
+func createSessionForTest(t *testing.T, svc Service) {
+	t.Helper()
+	_, err := svc.CreateSession(context.Background(), sessiondto.CreateSessionRequest{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+	})
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+}
+
 func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
@@ -152,6 +164,7 @@ func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	res, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -177,6 +190,28 @@ func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 	}
 }
 
+func TestServiceRejectsOfferWhenSessionWasNotCreated(t *testing.T) {
+	rooms := newMemoryRoomRepositoryForTest()
+	runtime := newMemoryRoomRepositoryForTest()
+	media := &fakeOfferAcceptor{}
+	provider := &fakeRealtimeCallCreator{}
+	states := &fakeMediaSessionStateRepository{}
+	svc := NewService(rooms, runtime, states, media, provider)
+
+	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if !errors.Is(err, usecase.ErrSessionNotFound) {
+		t.Fatalf("AcceptOffer() error = %v, want %v", err, usecase.ErrSessionNotFound)
+	}
+	if media.acceptCalls != 0 {
+		t.Fatalf("media AcceptOffer calls = %d, want 0", media.acceptCalls)
+	}
+}
+
 func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
@@ -184,6 +219,7 @@ func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	res, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -236,6 +272,7 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -288,6 +325,7 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -362,6 +400,7 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	res, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -431,6 +470,7 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -488,6 +528,7 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	states := &fakeMediaSessionStateRepository{}
 	core, observed := observer.New(zap.InfoLevel)
 	svc := newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.New(core))
+	createSessionForTest(t, svc)
 
 	res, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -561,6 +602,7 @@ func TestServicePersistsRoomMetadataForClientJoin(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -591,6 +633,7 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -659,6 +702,7 @@ func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 			},
 		},
 	})
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -688,6 +732,7 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -764,6 +809,7 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 		&configs.Config{},
 		zap.NewNop(),
 	)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -851,6 +897,7 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 		&configs.Config{},
 		zap.NewNop(),
 	)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -899,6 +946,7 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 		&configs.Config{},
 		zap.NewNop(),
 	)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -949,6 +997,7 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 		&configs.Config{},
 		zap.New(observed),
 	)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -991,6 +1040,7 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 	svc := NewServiceWithConfig(rooms, runtime, states, media, provider, &configs.Config{
 		Realtime: configs.RealtimeConfig{RealtimeEventHistoryLimit: 2},
 	})
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1040,6 +1090,7 @@ func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1106,6 +1157,7 @@ func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{createErr: errors.New("openai unavailable")}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1159,6 +1211,7 @@ func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1191,6 +1244,7 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1240,6 +1294,7 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1288,6 +1343,7 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1339,6 +1395,7 @@ func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1382,6 +1439,7 @@ func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1423,6 +1481,7 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1478,6 +1537,7 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1676,6 +1736,7 @@ func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1724,6 +1785,7 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",
@@ -1820,6 +1882,7 @@ func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
 	provider := &fakeRealtimeCallCreator{}
 	states := &fakeMediaSessionStateRepository{}
 	svc := NewService(rooms, runtime, states, media, provider)
+	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
 		SessionID:      "session-1",

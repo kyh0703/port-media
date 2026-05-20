@@ -13,6 +13,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	domainrepo "github.com/kyh0703/portfoilo-media/internal/core/domain/repository"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
+	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	corerepo "github.com/kyh0703/portfoilo-media/internal/core/repository"
 	sessionservice "github.com/kyh0703/portfoilo-media/internal/core/service/session"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
@@ -37,6 +38,12 @@ func TestJoinEndpointSmokeWithPionClient(t *testing.T) {
 	states := newSmokeMediaSessionStateRepository()
 	provider := newSmokeRealtimeProvider(t)
 	svc := sessionservice.NewService(rooms, runtime, states, media, provider)
+	if _, err := svc.CreateSession(context.Background(), sessiondto.CreateSessionRequest{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+	}); err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
 	handler := NewSessionsHandler(svc, fakeMediaTokenVerifier{
 		token: auth.MediaToken{
 			SessionID:      "session-1",
