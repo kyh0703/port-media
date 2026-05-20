@@ -16,6 +16,9 @@ import (
 	pionwebrtc "github.com/pion/webrtc/v4"
 )
 
+//go:generate go tool counterfeiter -generate
+//counterfeiter:generate . PeerConnectionFactory
+
 type OfferAcceptor interface {
 	AcceptOffer(ctx context.Context, input OfferInput) (*Peer, error)
 }

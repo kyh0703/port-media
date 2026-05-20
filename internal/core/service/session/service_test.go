@@ -9,142 +9,17 @@ import (
 
 	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
+	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository/repositoryfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/openai"
+	"github.com/kyh0703/portfoilo-media/internal/pkg/openai/openaifakes"
 	rtc "github.com/kyh0703/portfoilo-media/internal/pkg/webrtc"
+	"github.com/kyh0703/portfoilo-media/internal/pkg/webrtc/webrtcfakes"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
-
-type fakeOfferAcceptor struct {
-	acceptedInput     rtc.OfferInput
-	acceptedInputs    []rtc.OfferInput
-	createdInput      rtc.CreateOfferInput
-	appliedAnswer     string
-	closedSession     vo.SessionID
-	closedParticipant vo.ParticipantID
-	closeCalls        int
-	applyErr          error
-	acceptCalls       int
-}
-
-func (f *fakeOfferAcceptor) AcceptOffer(ctx context.Context, input rtc.OfferInput) (*rtc.Peer, error) {
-	_ = ctx
-	f.acceptCalls++
-	f.acceptedInput = input
-	f.acceptedInputs = append(f.acceptedInputs, input)
-	return &rtc.Peer{
-		SessionID:     input.SessionID,
-		ParticipantID: input.ParticipantID,
-		Role:          input.Role,
-		AnswerSDP:     "answer-sdp",
-	}, nil
-}
-
-func (f *fakeOfferAcceptor) CreateOffer(ctx context.Context, input rtc.CreateOfferInput) (*rtc.PeerOffer, error) {
-	_ = ctx
-	f.createdInput = input
-	return &rtc.PeerOffer{
-		SessionID:     input.SessionID,
-		ParticipantID: input.ParticipantID,
-		Role:          input.Role,
-		SDPOffer:      "openai-offer-sdp",
-	}, nil
-}
-
-func (f *fakeOfferAcceptor) ApplyAnswer(ctx context.Context, offer *rtc.PeerOffer, answerSDP string) (*rtc.Peer, error) {
-	_ = ctx
-	f.appliedAnswer = answerSDP
-	if f.applyErr != nil {
-		return nil, f.applyErr
-	}
-	return &rtc.Peer{
-		SessionID:     offer.SessionID,
-		ParticipantID: offer.ParticipantID,
-		Role:          offer.Role,
-		AnswerSDP:     answerSDP,
-	}, nil
-}
-
-func (f *fakeOfferAcceptor) CloseSession(ctx context.Context, sessionID vo.SessionID) error {
-	_ = ctx
-	f.closedSession = sessionID
-	f.closeCalls++
-	return nil
-}
-
-func (f *fakeOfferAcceptor) CloseParticipant(ctx context.Context, sessionID vo.SessionID, participantID vo.ParticipantID) error {
-	_ = ctx
-	f.closedSession = sessionID
-	f.closedParticipant = participantID
-	return nil
-}
-
-type fakeRealtimeCallCreator struct {
-	input       openai.CreateCallInput
-	hangupCalls []string
-	createErr   error
-	createCalls int
-}
-
-func (f *fakeRealtimeCallCreator) CreateCall(ctx context.Context, input openai.CreateCallInput) (openai.CreateCallResult, error) {
-	_ = ctx
-	f.createCalls++
-	f.input = input
-	if f.createErr != nil {
-		return openai.CreateCallResult{}, f.createErr
-	}
-	return openai.CreateCallResult{
-		SDPAnswer:      "openai-answer-sdp",
-		ProviderCallID: "rtc_123",
-	}, nil
-}
-
-func (f *fakeRealtimeCallCreator) HangupCall(ctx context.Context, providerCallID string) error {
-	_ = ctx
-	f.hangupCalls = append(f.hangupCalls, providerCallID)
-	return nil
-}
-
-type fakeMediaSessionStateRepository struct {
-	states  []entity.MediaSessionState
-	deleted []vo.SessionID
-}
-
-func (f *fakeMediaSessionStateRepository) Save(ctx context.Context, state entity.MediaSessionState) error {
-	_ = ctx
-	f.states = append(f.states, state)
-	return nil
-}
-
-func (f *fakeMediaSessionStateRepository) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
-	_ = ctx
-	for i := len(f.states) - 1; i >= 0; i-- {
-		if f.states[i].SessionID == sessionID {
-			return f.states[i], true, nil
-		}
-	}
-	return entity.MediaSessionState{}, false, nil
-}
-
-func (f *fakeMediaSessionStateRepository) Delete(ctx context.Context, sessionID vo.SessionID) error {
-	_ = ctx
-	f.deleted = append(f.deleted, sessionID)
-	return nil
-}
-
-type fakeConversationEventPublisher struct {
-	events []entity.ConversationEvent
-	err    error
-}
-
-func (f *fakeConversationEventPublisher) Publish(ctx context.Context, event entity.ConversationEvent) error {
-	_ = ctx
-	f.events = append(f.events, event)
-	return f.err
-}
 
 func createSessionForTest(t *testing.T, svc Service) {
 	t.Helper()
@@ -160,9 +35,23 @@ func createSessionForTest(t *testing.T, svc Service) {
 func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -179,13 +68,14 @@ func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 	if res.SDPAnswer != "answer-sdp" {
 		t.Fatalf("SDPAnswer = %q, want %q", res.SDPAnswer, "answer-sdp")
 	}
-	if media.acceptedInput.Role != vo.ParticipantRoleClient {
-		t.Fatalf("Role = %q, want %q", media.acceptedInput.Role, vo.ParticipantRoleClient)
+	_, acceptedInput := media.AcceptOfferArgsForCall(0)
+	if acceptedInput.Role != vo.ParticipantRoleClient {
+		t.Fatalf("Role = %q, want %q", acceptedInput.Role, vo.ParticipantRoleClient)
 	}
-	if media.acceptedInput.SessionID != vo.SessionID("session-1") {
-		t.Fatalf("SessionID = %q, want session-1", media.acceptedInput.SessionID)
+	if acceptedInput.SessionID != vo.SessionID("session-1") {
+		t.Fatalf("SessionID = %q, want session-1", acceptedInput.SessionID)
 	}
-	if !media.acceptedInput.PublishAudio {
+	if !acceptedInput.PublishAudio {
 		t.Fatal("PublishAudio = false, want true")
 	}
 }
@@ -193,9 +83,23 @@ func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 func TestServiceRejectsOfferWhenSessionWasNotCreated(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
@@ -207,17 +111,31 @@ func TestServiceRejectsOfferWhenSessionWasNotCreated(t *testing.T) {
 	if !errors.Is(err, usecase.ErrSessionNotFound) {
 		t.Fatalf("AcceptOffer() error = %v, want %v", err, usecase.ErrSessionNotFound)
 	}
-	if media.acceptCalls != 0 {
-		t.Fatalf("media AcceptOffer calls = %d, want 0", media.acceptCalls)
+	if media.AcceptOfferCallCount() != 0 {
+		t.Fatalf("media AcceptOffer calls = %d, want 0", media.AcceptOfferCallCount())
 	}
 }
 
 func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -268,9 +186,23 @@ func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -293,11 +225,11 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AcceptOffer() second publisher error = %v", err)
 	}
-	if media.acceptCalls != 2 {
-		t.Fatalf("media AcceptOffer calls = %d, want 2", media.acceptCalls)
+	if media.AcceptOfferCallCount() != 2 {
+		t.Fatalf("media AcceptOffer calls = %d, want 2", media.AcceptOfferCallCount())
 	}
-	if provider.createCalls != 1 {
-		t.Fatalf("provider CreateCall calls = %d, want 1", provider.createCalls)
+	if provider.CreateCallCallCount() != 1 {
+		t.Fatalf("provider CreateCall calls = %d, want 1", provider.CreateCallCallCount())
 	}
 
 	room, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1"))
@@ -321,9 +253,23 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -348,20 +294,19 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 		t.Fatalf("AcceptOffer() listener error = %v", err)
 	}
 
-	if media.acceptCalls != 2 {
-		t.Fatalf("media AcceptOffer calls = %d, want 2", media.acceptCalls)
+	if media.AcceptOfferCallCount() != 2 {
+		t.Fatalf("media AcceptOffer calls = %d, want 2", media.AcceptOfferCallCount())
 	}
-	if len(media.acceptedInputs) != 2 {
-		t.Fatalf("accepted inputs len = %d, want 2", len(media.acceptedInputs))
-	}
-	if !media.acceptedInputs[0].PublishAudio {
+	_, acceptedInput0 := media.AcceptOfferArgsForCall(0)
+	_, acceptedInput1 := media.AcceptOfferArgsForCall(1)
+	if !acceptedInput0.PublishAudio {
 		t.Fatal("publisher PublishAudio = false, want true")
 	}
-	if media.acceptedInputs[1].PublishAudio {
+	if acceptedInput1.PublishAudio {
 		t.Fatal("listener PublishAudio = true, want false")
 	}
-	if provider.createCalls != 1 {
-		t.Fatalf("provider CreateCall calls = %d, want 1", provider.createCalls)
+	if provider.CreateCallCallCount() != 1 {
+		t.Fatalf("provider CreateCall calls = %d, want 1", provider.CreateCallCallCount())
 	}
 
 	room, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1"))
@@ -396,9 +341,23 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -425,17 +384,18 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 	if leave.Status != string(vo.RoomStatusActive) {
 		t.Fatalf("leave status = %q, want active", leave.Status)
 	}
-	if media.closedSession != vo.SessionID("session-1") {
-		t.Fatalf("closed session = %q, want session-1", media.closedSession)
+	_, closedSession, closedParticipant := media.CloseParticipantArgsForCall(0)
+	if closedSession != vo.SessionID("session-1") {
+		t.Fatalf("closed session = %q, want session-1", closedSession)
 	}
-	if media.closedParticipant != vo.ParticipantID(res.ParticipantID) {
-		t.Fatalf("closed participant = %q, want %q", media.closedParticipant, res.ParticipantID)
+	if closedParticipant != vo.ParticipantID(res.ParticipantID) {
+		t.Fatalf("closed participant = %q, want %q", closedParticipant, res.ParticipantID)
 	}
-	if media.closeCalls != 0 {
-		t.Fatalf("CloseSession calls = %d, want 0", media.closeCalls)
+	if media.CloseSessionCallCount() != 0 {
+		t.Fatalf("CloseSession calls = %d, want 0", media.CloseSessionCallCount())
 	}
-	if len(provider.hangupCalls) != 0 {
-		t.Fatalf("provider hangup calls = %d, want 0", len(provider.hangupCalls))
+	if provider.HangupCallCallCount() != 0 {
+		t.Fatalf("provider hangup calls = %d, want 0", provider.HangupCallCallCount())
 	}
 
 	room, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1"))
@@ -454,7 +414,7 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 		}
 	}
 
-	state := states.states[len(states.states)-1]
+	_, state := states.SaveArgsForCall(states.SaveCallCount() - 1)
 	if state.Status != vo.RoomStatusActive {
 		t.Fatalf("state status = %q, want active", state.Status)
 	}
@@ -466,9 +426,23 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -482,11 +456,12 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
+	_, createdInput := media.CreateOfferArgsForCall(0)
 	leave, err := svc.LeaveParticipant(context.Background(), sessiondto.LeaveParticipantRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
-		ParticipantID:  string(media.createdInput.ParticipantID),
+		ParticipantID:  string(createdInput.ParticipantID),
 	})
 	if err != nil {
 		t.Fatalf("LeaveParticipant() error = %v", err)
@@ -495,14 +470,16 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 	if leave.Status != string(vo.RoomStatusFailed) {
 		t.Fatalf("leave status = %q, want failed", leave.Status)
 	}
-	if media.closedSession != vo.SessionID("session-1") {
-		t.Fatalf("closed session = %q, want session-1", media.closedSession)
+	_, closedSession := media.CloseSessionArgsForCall(0)
+	if closedSession != vo.SessionID("session-1") {
+		t.Fatalf("closed session = %q, want session-1", closedSession)
 	}
-	if media.closeCalls != 1 {
-		t.Fatalf("CloseSession calls = %d, want 1", media.closeCalls)
+	if media.CloseSessionCallCount() != 1 {
+		t.Fatalf("CloseSession calls = %d, want 1", media.CloseSessionCallCount())
 	}
-	if len(provider.hangupCalls) != 1 || provider.hangupCalls[0] != "rtc_123" {
-		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.hangupCalls)
+	_, hangupProviderCallID := provider.HangupCallArgsForCall(0)
+	if provider.HangupCallCallCount() != 1 || hangupProviderCallID != "rtc_123" {
+		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.Invocations())
 	}
 
 	if _, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1")); err != nil {
@@ -511,7 +488,7 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 		t.Fatal("runtime room found, want deleted")
 	}
 
-	state := states.states[len(states.states)-1]
+	_, state := states.SaveArgsForCall(states.SaveCallCount() - 1)
 	if state.Status != vo.RoomStatusFailed {
 		t.Fatalf("state status = %q, want failed", state.Status)
 	}
@@ -523,9 +500,23 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	core, observed := observer.New(zap.InfoLevel)
 	svc := newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.New(core))
 	createSessionForTest(t, svc)
@@ -561,10 +552,11 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 		t.Fatalf("audio_mode = %v, want publisher", joined["audio_mode"])
 	}
 
-	media.acceptedInput.OnConnectionStateChange(rtc.ConnectionStateChange{
-		SessionID:     media.acceptedInput.SessionID,
-		ParticipantID: media.acceptedInput.ParticipantID,
-		Role:          media.acceptedInput.Role,
+	_, acceptedInput := media.AcceptOfferArgsForCall(0)
+	acceptedInput.OnConnectionStateChange(rtc.ConnectionStateChange{
+		SessionID:     acceptedInput.SessionID,
+		ParticipantID: acceptedInput.ParticipantID,
+		Role:          acceptedInput.Role,
 		State:         vo.ConnectionStateConnected,
 	})
 	connectionEntries := observed.FilterMessage("media_participant_connection_state_changed").All()
@@ -576,10 +568,11 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 		t.Fatalf("connection_state = %v, want connected", connection["connection_state"])
 	}
 
-	media.createdInput.OnConnectionStateChange(rtc.ConnectionStateChange{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	createdInput.OnConnectionStateChange(rtc.ConnectionStateChange{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
 		State:         vo.ConnectionStateFailed,
 	})
 	failedEntries := observed.FilterMessage("media_room_failed").All()
@@ -598,9 +591,23 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 func TestServicePersistsRoomMetadataForClientJoin(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -629,9 +636,23 @@ func TestServicePersistsRoomMetadataForClientJoin(t *testing.T) {
 func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -645,17 +666,20 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	if media.createdInput.Role != vo.ParticipantRoleOpenAIAgent {
-		t.Fatalf("created role = %q, want %q", media.createdInput.Role, vo.ParticipantRoleOpenAIAgent)
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	if createdInput.Role != vo.ParticipantRoleOpenAIAgent {
+		t.Fatalf("created role = %q, want %q", createdInput.Role, vo.ParticipantRoleOpenAIAgent)
 	}
-	if media.createdInput.DataChannelLabel != "oai-events" {
-		t.Fatalf("data channel label = %q, want oai-events", media.createdInput.DataChannelLabel)
+	if createdInput.DataChannelLabel != "oai-events" {
+		t.Fatalf("data channel label = %q, want oai-events", createdInput.DataChannelLabel)
 	}
-	if provider.input.SDPOffer != "openai-offer-sdp" {
-		t.Fatalf("provider SDPOffer = %q, want openai-offer-sdp", provider.input.SDPOffer)
+	_, createCallInput := provider.CreateCallArgsForCall(0)
+	if createCallInput.SDPOffer != "openai-offer-sdp" {
+		t.Fatalf("provider SDPOffer = %q, want openai-offer-sdp", createCallInput.SDPOffer)
 	}
-	if media.appliedAnswer != "openai-answer-sdp" {
-		t.Fatalf("applied answer = %q, want openai-answer-sdp", media.appliedAnswer)
+	_, _, appliedAnswer := media.ApplyAnswerArgsForCall(0)
+	if appliedAnswer != "openai-answer-sdp" {
+		t.Fatalf("applied answer = %q, want openai-answer-sdp", appliedAnswer)
 	}
 
 	room, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1"))
@@ -689,9 +713,23 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewServiceWithConfig(rooms, runtime, states, media, provider, &configs.Config{
 		OpenAI: configs.OpenAIConfig{
 			RealtimeDataChannelLabel: "custom-events",
@@ -714,23 +752,38 @@ func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	if media.createdInput.DataChannelLabel != "custom-events" {
-		t.Fatalf("DataChannelLabel = %q, want custom-events", media.createdInput.DataChannelLabel)
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	if createdInput.DataChannelLabel != "custom-events" {
+		t.Fatalf("DataChannelLabel = %q, want custom-events", createdInput.DataChannelLabel)
 	}
-	if len(media.createdInput.InitialDataMessages) != 2 {
-		t.Fatalf("InitialDataMessages len = %d, want 2", len(media.createdInput.InitialDataMessages))
+	if len(createdInput.InitialDataMessages) != 2 {
+		t.Fatalf("InitialDataMessages len = %d, want 2", len(createdInput.InitialDataMessages))
 	}
-	if media.createdInput.InitialDataMessages[0] != `{"type":"session.update"}` {
-		t.Fatalf("InitialDataMessages[0] = %q", media.createdInput.InitialDataMessages[0])
+	if createdInput.InitialDataMessages[0] != `{"type":"session.update"}` {
+		t.Fatalf("InitialDataMessages[0] = %q", createdInput.InitialDataMessages[0])
 	}
 }
 
 func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -744,18 +797,19 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
-		Label:         media.createdInput.DataChannelLabel,
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
+		Label:         createdInput.DataChannelLabel,
 		Payload:       `{"type":"response.done"}`,
 	})
 
-	if len(states.states) != 2 {
-		t.Fatalf("state saves = %d, want 2", len(states.states))
+	if states.SaveCallCount() != 2 {
+		t.Fatalf("state saves = %d, want 2", states.SaveCallCount())
 	}
-	state := states.states[1]
+	_, state := states.SaveArgsForCall(1)
 	if state.LastRealtimeEventType != "response.done" {
 		t.Fatalf("LastRealtimeEventType = %q, want response.done", state.LastRealtimeEventType)
 	}
@@ -795,10 +849,24 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
-	publisher := &fakeConversationEventPublisher{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
+	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithConfigLoggerAndPublisher(
 		rooms,
 		runtime,
@@ -821,18 +889,19 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
-		Label:         media.createdInput.DataChannelLabel,
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
+		Label:         createdInput.DataChannelLabel,
 		Payload:       `{"type":"conversation.item.input_audio_transcription.completed","event_id":"evt_1","transcript":"hello","token":"drop","nested":{"authorization":"drop","value":"keep"}}`,
 	})
 
-	if len(publisher.events) != 1 {
-		t.Fatalf("published events = %d, want 1", len(publisher.events))
+	if publisher.PublishCallCount() != 1 {
+		t.Fatalf("published events = %d, want 1", publisher.PublishCallCount())
 	}
-	event := publisher.events[0]
+	_, event := publisher.PublishArgsForCall(0)
 	if event.SchemaVersion != 1 {
 		t.Fatalf("SchemaVersion = %d, want 1", event.SchemaVersion)
 	}
@@ -883,10 +952,24 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
-	publisher := &fakeConversationEventPublisher{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
+	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithConfigLoggerAndPublisher(
 		rooms,
 		runtime,
@@ -909,21 +992,22 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
-		Label:         media.createdInput.DataChannelLabel,
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
+		Label:         createdInput.DataChannelLabel,
 		Payload:       `{"type":"response.audio.delta","delta":"chunk"}`,
 	})
 
-	if len(publisher.events) != 0 {
-		t.Fatalf("published events = %d, want 0", len(publisher.events))
+	if publisher.PublishCallCount() != 0 {
+		t.Fatalf("published events = %d, want 0", publisher.PublishCallCount())
 	}
-	if len(states.states) != 2 {
-		t.Fatalf("state saves = %d, want 2", len(states.states))
+	if states.SaveCallCount() != 2 {
+		t.Fatalf("state saves = %d, want 2", states.SaveCallCount())
 	}
-	state := states.states[1]
+	_, state := states.SaveArgsForCall(1)
 	if state.LastRealtimeEventType != "response.audio.delta" {
 		t.Fatalf("LastRealtimeEventType = %q, want response.audio.delta", state.LastRealtimeEventType)
 	}
@@ -932,10 +1016,24 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
-	publisher := &fakeConversationEventPublisher{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
+	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithConfigLoggerAndPublisher(
 		rooms,
 		runtime,
@@ -958,34 +1056,52 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
+	_, createdInput := media.CreateOfferArgsForCall(0)
 	message := rtc.DataChannelMessage{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
-		Label:         media.createdInput.DataChannelLabel,
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
+		Label:         createdInput.DataChannelLabel,
 		Payload:       `{"type":"response.output_text.done","text":"hello"}`,
 	}
-	media.createdInput.OnDataChannelMessage(message)
-	media.createdInput.OnDataChannelMessage(message)
+	createdInput.OnDataChannelMessage(message)
+	createdInput.OnDataChannelMessage(message)
 
-	if len(publisher.events) != 2 {
-		t.Fatalf("published events = %d, want 2", len(publisher.events))
+	if publisher.PublishCallCount() != 2 {
+		t.Fatalf("published events = %d, want 2", publisher.PublishCallCount())
 	}
-	if publisher.events[0].EventID == "" {
+	_, firstEvent := publisher.PublishArgsForCall(0)
+	_, secondEvent := publisher.PublishArgsForCall(1)
+	if firstEvent.EventID == "" {
 		t.Fatal("fallback EventID is empty")
 	}
-	if publisher.events[0].EventID != publisher.events[1].EventID {
-		t.Fatalf("fallback EventID changed: %q != %q", publisher.events[0].EventID, publisher.events[1].EventID)
+	if firstEvent.EventID != secondEvent.EventID {
+		t.Fatalf("fallback EventID changed: %q != %q", firstEvent.EventID, secondEvent.EventID)
 	}
 }
 
 func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
-	publisher := &fakeConversationEventPublisher{err: errors.New("publish failed")}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
+	publisher := &repositoryfakes.FakeConversationEventPublisher{}
+	publisher.PublishReturns(errors.New("publish failed"))
 	observed, logs := observer.New(zap.WarnLevel)
 	svc := NewServiceWithConfigLoggerAndPublisher(
 		rooms,
@@ -1009,22 +1125,24 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
-		Label:         media.createdInput.DataChannelLabel,
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
+		Label:         createdInput.DataChannelLabel,
 		Payload:       `{"type":"response.output_text.done","text":"hello"}`,
 	})
 
-	if len(publisher.events) != 1 {
-		t.Fatalf("published events = %d, want 1 attempt", len(publisher.events))
+	if publisher.PublishCallCount() != 1 {
+		t.Fatalf("published events = %d, want 1 attempt", publisher.PublishCallCount())
 	}
-	if len(states.states) != 2 {
-		t.Fatalf("state saves = %d, want 2", len(states.states))
+	if states.SaveCallCount() != 2 {
+		t.Fatalf("state saves = %d, want 2", states.SaveCallCount())
 	}
-	if states.states[1].LastRealtimeEventType != "response.output_text.done" {
-		t.Fatalf("LastRealtimeEventType = %q, want response.output_text.done", states.states[1].LastRealtimeEventType)
+	_, state := states.SaveArgsForCall(1)
+	if state.LastRealtimeEventType != "response.output_text.done" {
+		t.Fatalf("LastRealtimeEventType = %q, want response.output_text.done", state.LastRealtimeEventType)
 	}
 	if logs.FilterMessage("media_conversation_event_publish_failed").Len() != 1 {
 		t.Fatalf("publish failure logs = %d, want 1", logs.FilterMessage("media_conversation_event_publish_failed").Len())
@@ -1034,9 +1152,23 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewServiceWithConfig(rooms, runtime, states, media, provider, &configs.Config{
 		Realtime: configs.RealtimeConfig{RealtimeEventHistoryLimit: 2},
 	})
@@ -1052,17 +1184,18 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
+	_, createdInput := media.CreateOfferArgsForCall(0)
 	for _, eventType := range []string{"session.created", "response.created", "response.done"} {
-		media.createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
-			SessionID:     media.createdInput.SessionID,
-			ParticipantID: media.createdInput.ParticipantID,
-			Role:          media.createdInput.Role,
-			Label:         media.createdInput.DataChannelLabel,
+		createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
+			SessionID:     createdInput.SessionID,
+			ParticipantID: createdInput.ParticipantID,
+			Role:          createdInput.Role,
+			Label:         createdInput.DataChannelLabel,
 			Payload:       `{"type":"` + eventType + `"}`,
 		})
 	}
 
-	state := states.states[len(states.states)-1]
+	_, state := states.SaveArgsForCall(states.SaveCallCount() - 1)
 	if len(state.RecentRealtimeEvents) != 2 {
 		t.Fatalf("RecentRealtimeEvents len = %d, want 2", len(state.RecentRealtimeEvents))
 	}
@@ -1086,9 +1219,23 @@ func TestRealtimeEventTypeFallsBackToUnknown(t *testing.T) {
 func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1102,10 +1249,10 @@ func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	if len(states.states) != 1 {
-		t.Fatalf("state saves = %d, want 1", len(states.states))
+	if states.SaveCallCount() != 1 {
+		t.Fatalf("state saves = %d, want 1", states.SaveCallCount())
 	}
-	state := states.states[0]
+	_, state := states.SaveArgsForCall(0)
 	if state.SessionID != vo.SessionID("session-1") {
 		t.Fatalf("SessionID = %q, want session-1", state.SessionID)
 	}
@@ -1153,9 +1300,23 @@ func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
 func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{createErr: errors.New("openai unavailable")}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{}, errors.New("openai unavailable"))
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1169,19 +1330,20 @@ func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 		t.Fatal("AcceptOffer() error = nil, want error")
 	}
 
-	if media.closedSession != vo.SessionID("session-1") {
-		t.Fatalf("closed session = %q, want session-1", media.closedSession)
+	_, closedSession := media.CloseSessionArgsForCall(0)
+	if closedSession != vo.SessionID("session-1") {
+		t.Fatalf("closed session = %q, want session-1", closedSession)
 	}
-	if len(provider.hangupCalls) != 0 {
-		t.Fatalf("hangup calls = %#v, want none because provider call was not created", provider.hangupCalls)
+	if provider.HangupCallCallCount() != 0 {
+		t.Fatalf("hangup calls = %#v, want none because provider call was not created", provider.Invocations())
 	}
 	if _, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1")); err != nil || found {
 		t.Fatalf("runtime found=%v err=%v, want not found", found, err)
 	}
-	if len(states.states) != 1 {
-		t.Fatalf("state saves = %d, want 1", len(states.states))
+	if states.SaveCallCount() != 1 {
+		t.Fatalf("state saves = %d, want 1", states.SaveCallCount())
 	}
-	state := states.states[0]
+	_, state := states.SaveArgsForCall(0)
 	if state.Status != vo.RoomStatusFailed {
 		t.Fatalf("Status = %q, want %q", state.Status, vo.RoomStatusFailed)
 	}
@@ -1207,9 +1369,23 @@ func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{applyErr: errors.New("invalid openai answer")}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(nil, errors.New("invalid openai answer"))
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1223,26 +1399,43 @@ func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
 		t.Fatal("AcceptOffer() error = nil, want error")
 	}
 
-	if len(provider.hangupCalls) != 1 || provider.hangupCalls[0] != "rtc_123" {
-		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.hangupCalls)
+	_, hangupProviderCallID := provider.HangupCallArgsForCall(0)
+	if provider.HangupCallCallCount() != 1 || hangupProviderCallID != "rtc_123" {
+		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.Invocations())
 	}
-	if media.closedSession != vo.SessionID("session-1") {
-		t.Fatalf("closed session = %q, want session-1", media.closedSession)
+	_, closedSession := media.CloseSessionArgsForCall(0)
+	if closedSession != vo.SessionID("session-1") {
+		t.Fatalf("closed session = %q, want session-1", closedSession)
 	}
-	if len(states.states) != 1 {
-		t.Fatalf("state saves = %d, want 1", len(states.states))
+	if states.SaveCallCount() != 1 {
+		t.Fatalf("state saves = %d, want 1", states.SaveCallCount())
 	}
-	if states.states[0].Status != vo.RoomStatusFailed {
-		t.Fatalf("Status = %q, want %q", states.states[0].Status, vo.RoomStatusFailed)
+	_, state := states.SaveArgsForCall(0)
+	if state.Status != vo.RoomStatusFailed {
+		t.Fatalf("Status = %q, want %q", state.Status, vo.RoomStatusFailed)
 	}
 }
 
 func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1256,18 +1449,19 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.acceptedInput.OnMediaTrackStateChange(rtc.MediaTrackStateChange{
-		SessionID:     media.acceptedInput.SessionID,
-		ParticipantID: media.acceptedInput.ParticipantID,
-		Role:          media.acceptedInput.Role,
+	_, acceptedInput := media.AcceptOfferArgsForCall(0)
+	acceptedInput.OnMediaTrackStateChange(rtc.MediaTrackStateChange{
+		SessionID:     acceptedInput.SessionID,
+		ParticipantID: acceptedInput.ParticipantID,
+		Role:          acceptedInput.Role,
 		Kind:          vo.TrackKindAudio,
 		State:         vo.TrackStateActive,
 	})
 
-	if len(states.states) != 2 {
-		t.Fatalf("state saves = %d, want 2", len(states.states))
+	if states.SaveCallCount() != 2 {
+		t.Fatalf("state saves = %d, want 2", states.SaveCallCount())
 	}
-	state := states.states[1]
+	_, state := states.SaveArgsForCall(1)
 	if state.MediaState != vo.TrackStateActive {
 		t.Fatalf("MediaState = %q, want %q", state.MediaState, vo.TrackStateActive)
 	}
@@ -1279,7 +1473,7 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 	if !found {
 		t.Fatal("runtime room not found")
 	}
-	participant := room.Participants[media.acceptedInput.ParticipantID]
+	participant := room.Participants[acceptedInput.ParticipantID]
 	for _, track := range participant.Tracks {
 		if track.Kind == vo.TrackKindAudio && track.State != vo.TrackStateActive {
 			t.Fatalf("audio track state = %q, want %q", track.State, vo.TrackStateActive)
@@ -1290,9 +1484,23 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1306,15 +1514,16 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.acceptedInput.OnConnectionStateChange(rtc.ConnectionStateChange{
-		SessionID:     media.acceptedInput.SessionID,
-		ParticipantID: media.acceptedInput.ParticipantID,
-		Role:          media.acceptedInput.Role,
+	_, acceptedInput := media.AcceptOfferArgsForCall(0)
+	acceptedInput.OnConnectionStateChange(rtc.ConnectionStateChange{
+		SessionID:     acceptedInput.SessionID,
+		ParticipantID: acceptedInput.ParticipantID,
+		Role:          acceptedInput.Role,
 		State:         vo.ConnectionStateFailed,
 	})
 
-	if media.closedSession != "" {
-		t.Fatalf("closed session = %q, want empty", media.closedSession)
+	if media.CloseSessionCallCount() != 0 {
+		t.Fatalf("CloseSession calls = %d, want 0", media.CloseSessionCallCount())
 	}
 	room, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1"))
 	if err != nil {
@@ -1323,14 +1532,14 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 	if !found {
 		t.Fatal("runtime room not found")
 	}
-	state := states.states[len(states.states)-1]
+	_, state := states.SaveArgsForCall(states.SaveCallCount() - 1)
 	if state.Status != vo.RoomStatusActive {
 		t.Fatalf("Status = %q, want %q", state.Status, vo.RoomStatusActive)
 	}
 	if state.ConnectionState == vo.ConnectionStateFailed {
 		t.Fatalf("ConnectionState = %q, want non-failed", state.ConnectionState)
 	}
-	participant := room.Participants[media.acceptedInput.ParticipantID]
+	participant := room.Participants[acceptedInput.ParticipantID]
 	if participant.State != vo.ConnectionStateFailed {
 		t.Fatalf("client participant state = %q, want failed", participant.State)
 	}
@@ -1339,9 +1548,23 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1355,16 +1578,17 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.acceptedInput.OnMediaTrackStateChange(rtc.MediaTrackStateChange{
-		SessionID:     media.acceptedInput.SessionID,
-		ParticipantID: media.acceptedInput.ParticipantID,
-		Role:          media.acceptedInput.Role,
+	_, acceptedInput := media.AcceptOfferArgsForCall(0)
+	acceptedInput.OnMediaTrackStateChange(rtc.MediaTrackStateChange{
+		SessionID:     acceptedInput.SessionID,
+		ParticipantID: acceptedInput.ParticipantID,
+		Role:          acceptedInput.Role,
 		Kind:          vo.TrackKindAudio,
 		State:         vo.TrackStateFailed,
 	})
 
-	if media.closedSession != "" {
-		t.Fatalf("closed session = %q, want empty", media.closedSession)
+	if media.CloseSessionCallCount() != 0 {
+		t.Fatalf("CloseSession calls = %d, want 0", media.CloseSessionCallCount())
 	}
 	room, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1"))
 	if err != nil {
@@ -1373,14 +1597,14 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 	if !found {
 		t.Fatal("runtime room not found")
 	}
-	state := states.states[len(states.states)-1]
+	_, state := states.SaveArgsForCall(states.SaveCallCount() - 1)
 	if state.Status != vo.RoomStatusActive {
 		t.Fatalf("Status = %q, want %q", state.Status, vo.RoomStatusActive)
 	}
 	if state.MediaState == vo.TrackStateFailed {
 		t.Fatalf("MediaState = %q, want non-failed", state.MediaState)
 	}
-	participant := room.Participants[media.acceptedInput.ParticipantID]
+	participant := room.Participants[acceptedInput.ParticipantID]
 	for _, track := range participant.Tracks {
 		if track.Kind == vo.TrackKindAudio && track.State != vo.TrackStateFailed {
 			t.Fatalf("client audio track state = %q, want failed", track.State)
@@ -1391,9 +1615,23 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1407,23 +1645,26 @@ func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.createdInput.OnConnectionStateChange(rtc.ConnectionStateChange{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	createdInput.OnConnectionStateChange(rtc.ConnectionStateChange{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
 		State:         vo.ConnectionStateFailed,
 	})
 
-	if media.closedSession != vo.SessionID("session-1") {
-		t.Fatalf("closed session = %q, want session-1", media.closedSession)
+	_, closedSession := media.CloseSessionArgsForCall(0)
+	if closedSession != vo.SessionID("session-1") {
+		t.Fatalf("closed session = %q, want session-1", closedSession)
 	}
-	if len(provider.hangupCalls) != 1 || provider.hangupCalls[0] != "rtc_123" {
-		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.hangupCalls)
+	_, hangupProviderCallID := provider.HangupCallArgsForCall(0)
+	if provider.HangupCallCallCount() != 1 || hangupProviderCallID != "rtc_123" {
+		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.Invocations())
 	}
 	if _, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1")); err != nil || found {
 		t.Fatalf("runtime found=%v err=%v, want not found", found, err)
 	}
-	state := states.states[len(states.states)-1]
+	_, state := states.SaveArgsForCall(states.SaveCallCount() - 1)
 	if state.Status != vo.RoomStatusFailed {
 		t.Fatalf("Status = %q, want %q", state.Status, vo.RoomStatusFailed)
 	}
@@ -1435,9 +1676,23 @@ func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1451,21 +1706,24 @@ func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.createdInput.OnMediaTrackStateChange(rtc.MediaTrackStateChange{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	createdInput.OnMediaTrackStateChange(rtc.MediaTrackStateChange{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
 		Kind:          vo.TrackKindAudio,
 		State:         vo.TrackStateFailed,
 	})
 
-	if media.closedSession != vo.SessionID("session-1") {
-		t.Fatalf("closed session = %q, want session-1", media.closedSession)
+	_, closedSession := media.CloseSessionArgsForCall(0)
+	if closedSession != vo.SessionID("session-1") {
+		t.Fatalf("closed session = %q, want session-1", closedSession)
 	}
-	if len(provider.hangupCalls) != 1 || provider.hangupCalls[0] != "rtc_123" {
-		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.hangupCalls)
+	_, hangupProviderCallID := provider.HangupCallArgsForCall(0)
+	if provider.HangupCallCallCount() != 1 || hangupProviderCallID != "rtc_123" {
+		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.Invocations())
 	}
-	state := states.states[len(states.states)-1]
+	_, state := states.SaveArgsForCall(states.SaveCallCount() - 1)
 	if state.Status != vo.RoomStatusFailed {
 		t.Fatalf("Status = %q, want %q", state.Status, vo.RoomStatusFailed)
 	}
@@ -1477,9 +1735,23 @@ func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1493,23 +1765,25 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
 
-	media.acceptedInput.OnConnectionStateChange(rtc.ConnectionStateChange{
-		SessionID:     media.acceptedInput.SessionID,
-		ParticipantID: media.acceptedInput.ParticipantID,
-		Role:          media.acceptedInput.Role,
+	_, acceptedInput := media.AcceptOfferArgsForCall(0)
+	acceptedInput.OnConnectionStateChange(rtc.ConnectionStateChange{
+		SessionID:     acceptedInput.SessionID,
+		ParticipantID: acceptedInput.ParticipantID,
+		Role:          acceptedInput.Role,
 		State:         vo.ConnectionStateConnected,
 	})
-	media.createdInput.OnConnectionStateChange(rtc.ConnectionStateChange{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	createdInput.OnConnectionStateChange(rtc.ConnectionStateChange{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
 		State:         vo.ConnectionStateConnected,
 	})
 
-	if len(states.states) != 3 {
-		t.Fatalf("state saves = %d, want 3", len(states.states))
+	if states.SaveCallCount() != 3 {
+		t.Fatalf("state saves = %d, want 3", states.SaveCallCount())
 	}
-	state := states.states[2]
+	_, state := states.SaveArgsForCall(2)
 	if state.UserID != "user-1" {
 		t.Fatalf("UserID = %q, want user-1", state.UserID)
 	}
@@ -1524,7 +1798,7 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 	if !found {
 		t.Fatal("runtime room not found")
 	}
-	participant := room.Participants[media.acceptedInput.ParticipantID]
+	participant := room.Participants[acceptedInput.ParticipantID]
 	if participant.State != vo.ConnectionStateConnected {
 		t.Fatalf("participant state = %q, want %q", participant.State, vo.ConnectionStateConnected)
 	}
@@ -1533,9 +1807,23 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 func TestServiceEndsSessionCleanup(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1561,11 +1849,13 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 	if res.Status != string(vo.RoomStatusClosed) {
 		t.Fatalf("status = %q, want %q", res.Status, vo.RoomStatusClosed)
 	}
-	if media.closedSession != vo.SessionID("session-1") {
-		t.Fatalf("closed session = %q, want session-1", media.closedSession)
+	_, closedSession := media.CloseSessionArgsForCall(0)
+	if closedSession != vo.SessionID("session-1") {
+		t.Fatalf("closed session = %q, want session-1", closedSession)
 	}
-	if len(provider.hangupCalls) != 1 || provider.hangupCalls[0] != "rtc_123" {
-		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.hangupCalls)
+	_, hangupProviderCallID := provider.HangupCallArgsForCall(0)
+	if provider.HangupCallCallCount() != 1 || hangupProviderCallID != "rtc_123" {
+		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.Invocations())
 	}
 	if _, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1")); err != nil || found {
 		t.Fatalf("runtime found=%v err=%v, want not found", found, err)
@@ -1586,9 +1876,23 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	svcImpl := svc.(*service)
 
@@ -1624,11 +1928,13 @@ func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
 	if cleaned != 1 {
 		t.Fatalf("cleaned = %d, want 1", cleaned)
 	}
-	if media.closedSession != vo.SessionID("session-1") {
-		t.Fatalf("closed session = %q, want session-1", media.closedSession)
+	_, closedSession := media.CloseSessionArgsForCall(0)
+	if closedSession != vo.SessionID("session-1") {
+		t.Fatalf("closed session = %q, want session-1", closedSession)
 	}
-	if len(provider.hangupCalls) != 1 || provider.hangupCalls[0] != "rtc_123" {
-		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.hangupCalls)
+	_, hangupProviderCallID := provider.HangupCallArgsForCall(0)
+	if provider.HangupCallCallCount() != 1 || hangupProviderCallID != "rtc_123" {
+		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.Invocations())
 	}
 	if _, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1")); err != nil || found {
 		t.Fatalf("runtime found=%v err=%v, want not found", found, err)
@@ -1644,17 +1950,32 @@ func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
 	if room.Status != vo.RoomStatusClosed {
 		t.Fatalf("metadata status = %q, want %q", room.Status, vo.RoomStatusClosed)
 	}
-	if len(states.states) != 1 || states.states[0].Status != vo.RoomStatusClosed {
-		t.Fatalf("states = %#v, want one closed state", states.states)
+	_, state := states.SaveArgsForCall(0)
+	if states.SaveCallCount() != 1 || state.Status != vo.RoomStatusClosed {
+		t.Fatalf("states = %#v, want one closed state", states.Invocations())
 	}
 }
 
 func TestServiceKeepsRecentlyUpdatedRuntimeRooms(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	svcImpl := svc.(*service)
 
@@ -1674,17 +1995,31 @@ func TestServiceKeepsRecentlyUpdatedRuntimeRooms(t *testing.T) {
 	if cleaned != 0 {
 		t.Fatalf("cleaned = %d, want 0", cleaned)
 	}
-	if media.closeCalls != 0 {
-		t.Fatalf("media close calls = %d, want 0", media.closeCalls)
+	if media.CloseSessionCallCount() != 0 {
+		t.Fatalf("media close calls = %d, want 0", media.CloseSessionCallCount())
 	}
 }
 
 func TestServiceShutdownClosesActiveRuntimeRooms(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	svcImpl := svc.(*service)
 
@@ -1715,26 +2050,43 @@ func TestServiceShutdownClosesActiveRuntimeRooms(t *testing.T) {
 	if cleaned != 1 {
 		t.Fatalf("cleaned = %d, want 1", cleaned)
 	}
-	if media.closedSession != vo.SessionID("session-1") {
-		t.Fatalf("closed session = %q, want session-1", media.closedSession)
+	_, closedSession := media.CloseSessionArgsForCall(0)
+	if closedSession != vo.SessionID("session-1") {
+		t.Fatalf("closed session = %q, want session-1", closedSession)
 	}
-	if len(provider.hangupCalls) != 1 || provider.hangupCalls[0] != "rtc_123" {
-		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.hangupCalls)
+	_, hangupProviderCallID := provider.HangupCallArgsForCall(0)
+	if provider.HangupCallCallCount() != 1 || hangupProviderCallID != "rtc_123" {
+		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.Invocations())
 	}
 	if _, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1")); err != nil || found {
 		t.Fatalf("runtime found=%v err=%v, want not found", found, err)
 	}
-	if len(states.states) != 1 || states.states[0].Status != vo.RoomStatusClosed {
-		t.Fatalf("states = %#v, want one closed state", states.states)
+	_, state := states.SaveArgsForCall(0)
+	if states.SaveCallCount() != 1 || state.Status != vo.RoomStatusClosed {
+		t.Fatalf("states = %#v, want one closed state", states.Invocations())
 	}
 }
 
 func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1757,10 +2109,10 @@ func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 		t.Fatalf("EndSession() error = %v", err)
 	}
 
-	if len(states.states) != 2 {
-		t.Fatalf("state saves = %d, want 2", len(states.states))
+	if states.SaveCallCount() != 2 {
+		t.Fatalf("state saves = %d, want 2", states.SaveCallCount())
 	}
-	state := states.states[1]
+	_, state := states.SaveArgsForCall(1)
 	if state.SessionID != vo.SessionID("session-1") {
 		t.Fatalf("SessionID = %q, want session-1", state.SessionID)
 	}
@@ -1781,9 +2133,23 @@ func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 func TestServiceReturnsRuntimeStats(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
@@ -1796,30 +2162,32 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AcceptOffer() error = %v", err)
 	}
-	media.acceptedInput.OnConnectionStateChange(rtc.ConnectionStateChange{
-		SessionID:     media.acceptedInput.SessionID,
-		ParticipantID: media.acceptedInput.ParticipantID,
-		Role:          media.acceptedInput.Role,
+	_, acceptedInput := media.AcceptOfferArgsForCall(0)
+	acceptedInput.OnConnectionStateChange(rtc.ConnectionStateChange{
+		SessionID:     acceptedInput.SessionID,
+		ParticipantID: acceptedInput.ParticipantID,
+		Role:          acceptedInput.Role,
 		State:         vo.ConnectionStateConnected,
 	})
-	media.createdInput.OnConnectionStateChange(rtc.ConnectionStateChange{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	createdInput.OnConnectionStateChange(rtc.ConnectionStateChange{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
 		State:         vo.ConnectionStateConnected,
 	})
-	media.acceptedInput.OnMediaTrackStateChange(rtc.MediaTrackStateChange{
-		SessionID:     media.acceptedInput.SessionID,
-		ParticipantID: media.acceptedInput.ParticipantID,
-		Role:          media.acceptedInput.Role,
+	acceptedInput.OnMediaTrackStateChange(rtc.MediaTrackStateChange{
+		SessionID:     acceptedInput.SessionID,
+		ParticipantID: acceptedInput.ParticipantID,
+		Role:          acceptedInput.Role,
 		Kind:          vo.TrackKindAudio,
 		State:         vo.TrackStateActive,
 	})
-	media.createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
-		SessionID:     media.createdInput.SessionID,
-		ParticipantID: media.createdInput.ParticipantID,
-		Role:          media.createdInput.Role,
-		Label:         media.createdInput.DataChannelLabel,
+	createdInput.OnDataChannelMessage(rtc.DataChannelMessage{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
+		Label:         createdInput.DataChannelLabel,
 		Payload:       `{"type":"response.done"}`,
 	})
 
@@ -1878,9 +2246,23 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
 	rooms := newMemoryRoomRepositoryForTest()
 	runtime := newMemoryRoomRepositoryForTest()
-	media := &fakeOfferAcceptor{}
-	provider := &fakeRealtimeCallCreator{}
-	states := &fakeMediaSessionStateRepository{}
+	media := &webrtcfakes.FakePeerConnectionFactory{}
+	media.AcceptOfferReturns(&rtc.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&rtc.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&rtc.Peer{}, nil)
+	provider := &openaifakes.FakeRealtimeCallManager{}
+	provider.CreateCallReturns(openai.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &repositoryfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return entity.MediaSessionState{}, false, nil
+	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 

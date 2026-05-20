@@ -15,6 +15,9 @@ import (
 	"github.com/kyh0703/portfoilo-media/configs"
 )
 
+//go:generate go tool counterfeiter -generate
+//counterfeiter:generate . RealtimeCallManager
+
 type RealtimeClient struct {
 	baseURL    string
 	model      string

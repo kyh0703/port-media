@@ -26,6 +26,11 @@ tasks:
     cmds:
       - go test ./...
 
+  generate:
+    desc: Regenerate Go test fakes
+    cmds:
+      - go generate ./...
+
   tidy:
     desc: Tidy Go module dependencies
     cmds:
