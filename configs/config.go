@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
 )
 
@@ -15,6 +16,9 @@ func NewConfig(vars Vars) (*Config, error) {
 	v.AddConfigPath("./configs")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+	if err := bindEnv(v); err != nil {
+		return nil, err
+	}
 
 	setDefaults(v)
 
@@ -26,8 +30,26 @@ func NewConfig(vars Vars) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
 
 	return &cfg, nil
+}
+
+func bindEnv(v *viper.Viper) error {
+	if err := v.BindEnv("node_id", "NODE_ID"); err != nil {
+		return fmt.Errorf("bind NODE_ID: %w", err)
+	}
+	return nil
+}
+
+func validateConfig(cfg Config) error {
+	cfg.NodeID = strings.TrimSpace(cfg.NodeID)
+	if err := validator.New().Struct(cfg); err != nil {
+		return fmt.Errorf("validate config: %w", err)
+	}
+	return nil
 }
 
 func setDefaults(v *viper.Viper) {
@@ -54,6 +76,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("database.max_idle_conns", 5)
 	v.SetDefault("redis.addr", "localhost:6379")
 	v.SetDefault("redis.db", 0)
+	v.SetDefault("media_server.url", "")
+	v.SetDefault("media_server.status", "healthy")
+	v.SetDefault("media_server.heartbeat_enabled", true)
+	v.SetDefault("media_server.heartbeat_interval", "10s")
+	v.SetDefault("media_server.heartbeat_ttl", "30s")
+	v.SetDefault("media_server.max_sessions", 0)
 	v.SetDefault("events.conversation_stream_enabled", true)
 	v.SetDefault("events.conversation_stream_name", "media:conversation-events:v1")
 	v.SetDefault("events.conversation_stream_max_len", 0)

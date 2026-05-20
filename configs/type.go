@@ -3,12 +3,14 @@ package configs
 import "time"
 
 type Config struct {
+	NodeID        string              `mapstructure:"node_id" validate:"required"`
 	App           AppConfig           `mapstructure:"app"`
 	Server        ServerConfig        `mapstructure:"server"`
 	Log           LogConfig           `mapstructure:"log"`
 	OpenAI        OpenAIConfig        `mapstructure:"openai"`
 	Database      DatabaseConfig      `mapstructure:"database"`
 	Redis         RedisConfig         `mapstructure:"redis"`
+	MediaServer   MediaServerConfig   `mapstructure:"media_server"`
 	Events        EventsConfig        `mapstructure:"events"`
 	Realtime      RealtimeConfig      `mapstructure:"realtime"`
 	Observability ObservabilityConfig `mapstructure:"observability"`
@@ -60,6 +62,15 @@ type RedisConfig struct {
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 	DB       int    `mapstructure:"db"`
+}
+
+type MediaServerConfig struct {
+	URL               string        `mapstructure:"url"`
+	Status            string        `mapstructure:"status"`
+	HeartbeatEnabled  bool          `mapstructure:"heartbeat_enabled"`
+	HeartbeatInterval time.Duration `mapstructure:"heartbeat_interval"`
+	HeartbeatTTL      time.Duration `mapstructure:"heartbeat_ttl"`
+	MaxSessions       int           `mapstructure:"max_sessions"`
 }
 
 type EventsConfig struct {
