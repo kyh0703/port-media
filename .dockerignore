@@ -1,0 +1,11 @@
+.git
+.gitignore
+.air.toml
+.editorconfig
+.gitattributes
+docs/
+build/
+**/*_test.go
+tmp/
+*.db
+*.log

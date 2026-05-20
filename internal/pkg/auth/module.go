@@ -5,7 +5,10 @@ import "go.uber.org/fx"
 var Module = fx.Module(
 	"auth",
 	fx.Provide(
-		NewRedisMediaTokenStore,
+		fx.Annotate(
+			NewRedisMediaTokenStore,
+			fx.As(new(MediaTokenStore)),
+		),
 		NewMediaTokenVerifier,
 	),
 )

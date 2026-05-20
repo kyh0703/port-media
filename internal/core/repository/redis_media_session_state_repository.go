@@ -112,7 +112,7 @@ type mediaSessionStatePayload struct {
 	Participants          int                            `json:"participants"`
 	ParticipantStates     []mediaSessionParticipantState `json:"participant_states"`
 	LastRealtimeEventType string                         `json:"last_realtime_event_type,omitempty"`
-	LastRealtimeEventAt   time.Time                      `json:"last_realtime_event_at,omitempty"`
+	LastRealtimeEventAt   time.Time                      `json:"last_realtime_event_at"`
 	RecentRealtimeEvents  []realtimeEventPayload         `json:"recent_realtime_events,omitempty"`
 	StartedAt             time.Time                      `json:"started_at"`
 	LastActiveAt          time.Time                      `json:"last_active_at"`

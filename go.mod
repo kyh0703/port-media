@@ -1,13 +1,15 @@
 module github.com/kyh0703/portfoilo-media
 
-go 1.25.0
+go 1.26
 
 require (
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/gofiber/contrib/fiberzap/v2 v2.1.0
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/google/uuid v1.6.0
 	github.com/pion/interceptor v0.1.44
+	github.com/pion/rtp v1.10.1
 	github.com/pion/webrtc/v4 v4.2.12
 	github.com/redis/go-redis/v9 v9.19.0
 	github.com/spf13/viper v1.19.0
@@ -19,7 +21,6 @@ require (
 )
 
 require (
-	github.com/alicebob/miniredis/v2 v2.38.0 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -46,7 +47,6 @@ require (
 	github.com/pion/mdns/v2 v2.1.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.16 // indirect
-	github.com/pion/rtp v1.10.1 // indirect
 	github.com/pion/sctp v1.9.5 // indirect
 	github.com/pion/sdp/v3 v3.0.18 // indirect
 	github.com/pion/srtp/v3 v3.0.10 // indirect
