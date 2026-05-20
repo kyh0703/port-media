@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/configs"
-	"github.com/kyh0703/portfoilo-media/internal/core/domain/model"
+	"github.com/kyh0703/portfoilo-media/internal/core/repository/model"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/driver/sqliteshim"
