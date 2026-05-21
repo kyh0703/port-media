@@ -939,8 +939,7 @@ func isPublishableConversationEvent(eventType string) bool {
 }
 
 var conversationEventAllowlist = map[string]struct{}{
-	"session.created":           {},
-	"conversation.item.created": {},
+	"conversation.item.created":                             {},
 	"conversation.item.input_audio_transcription.completed": {},
 	"conversation.item.input_audio_transcription.failed":    {},
 	"response.output_audio_transcript.done":                 {},

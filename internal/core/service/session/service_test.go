@@ -998,7 +998,7 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
 		Label:         createdInput.DataChannelLabel,
-		Payload:       `{"type":"response.audio.delta","delta":"chunk"}`,
+		Payload:       `{"type":"session.created"}`,
 	})
 
 	if publisher.PublishCallCount() != 0 {
@@ -1008,8 +1008,8 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 		t.Fatalf("state saves = %d, want 2", states.SaveCallCount())
 	}
 	_, state := states.SaveArgsForCall(1)
-	if state.LastRealtimeEventType != "response.audio.delta" {
-		t.Fatalf("LastRealtimeEventType = %q, want response.audio.delta", state.LastRealtimeEventType)
+	if state.LastRealtimeEventType != "session.created" {
+		t.Fatalf("LastRealtimeEventType = %q, want session.created", state.LastRealtimeEventType)
 	}
 }
 
