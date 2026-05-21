@@ -130,7 +130,7 @@ Dubu needs to stop letting clients connect directly to OpenAI Realtime and inste
 - Redis token values must include `session_id`, `conversation_id`, and `user_id`.
 - Live media session state uses Redis key `media:session:<session_id>` with TTL, room status, WebRTC connection state, audio media state, and `last_active_at`.
 - Failure cleanup writes failed room, connection, and media state before leaving the session for TTL expiry.
-- Runtime monitoring starts with JSON stats at `/api/v1/metrics`, including role and publisher/listener audio-mode counts.
+- Runtime monitoring starts with Prometheus stats at `/metrics`, including role and publisher/listener audio-mode counts.
 - Single-session live status is available at `/api/v1/sessions/:sessionId/status` with a valid media token and includes participant role/audio-mode snapshots.
 - HTTP SDP offer/answer signaling uses non-trickle ICE by waiting for local ICE gathering before returning SDP.
 - Multiple client offers can join the same active session; media direction is selected with publisher/listener mode.

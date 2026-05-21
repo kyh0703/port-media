@@ -6,7 +6,6 @@ var Module = fx.Module(
 	"handler",
 	fx.Provide(
 		AsHandler(NewHealthHandler),
-		AsHandler(NewMetricsHandler),
 		AsHandler(NewSessionsHandler),
 	),
 )

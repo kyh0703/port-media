@@ -50,7 +50,6 @@
   - v1 does not need horizontal SFU clustering.
   - v1 allows multiple client participants per room and one OpenAI agent participant. Client media direction is selected per offer with `publisher` or `listener`; publisher count is not hard-coded in the media server.
   - v1 should expose structured logs and metrics labels for session id, room id, participant role, track type, connection state, and failure reason.
-  - v1 exposes JSON runtime stats at `/api/v1/metrics` for active room/session, participant, track, role, audio mode, realtime event, connection, and media counts.
   - v1 exposes Prometheus-compatible runtime gauges at `/metrics` when `observability.metrics_enabled` is true.
   - v1 exposes authenticated single-session live status at `/api/v1/sessions/:sessionId/status`, backed by Redis state.
   - v1 emits structured lifecycle logs for participant join/leave, room close/fail, connection state, media track state, and OpenAI Realtime event observations using stable monitoring keys.

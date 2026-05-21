@@ -9,7 +9,7 @@
   - `portfoilo-media` can connect a matching OpenAI Realtime participant for the session.
   - Client audio is forwarded to OpenAI Realtime and OpenAI audio is forwarded back to the client.
   - `portfoilo-media` stores live media session status in Redis for `dubu-api` lookup.
-  - The system exposes enough logs and `/api/v1/metrics` runtime fields to support later monitoring.
+  - The system exposes enough logs and Prometheus `/metrics` fields to support later monitoring.
 
 ## Upcoming Versions
 
