@@ -1,16 +1,21 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/kyh0703/portfoilo-media/internal/pkg/httpx"
 	"go.uber.org/fx"
 )
+
+//go:generate go tool counterfeiter -generate
+
+type ErrorHandlerFunc = httpx.ErrorHandlerFunc
 
 type Mapper struct {
 	Method  string
 	Path    string
-	Handler []fiber.Handler
+	Handler httpx.ErrorHandlerFunc
 }
 
+//counterfeiter:generate . Handler
 type Handler interface {
 	Table() []Mapper
 }

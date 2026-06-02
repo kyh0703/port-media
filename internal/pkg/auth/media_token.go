@@ -10,6 +10,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+//go:generate go tool counterfeiter -generate
+
 const MediaTokenKeyPrefix = "media:token:"
 
 var (
@@ -24,10 +26,12 @@ type MediaToken struct {
 	UserID         string `json:"user_id"`
 }
 
+//counterfeiter:generate . MediaTokenStore
 type MediaTokenStore interface {
 	Get(ctx context.Context, token string) (MediaToken, error)
 }
 
+//counterfeiter:generate . MediaTokenVerifier
 type MediaTokenVerifier interface {
 	Verify(ctx context.Context, raw string) (MediaToken, error)
 }

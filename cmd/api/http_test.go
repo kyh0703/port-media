@@ -2,19 +2,15 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/kyh0703/portfoilo-media/configs"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/handler"
-	"github.com/kyh0703/portfoilo-media/internal/core/middleware"
+	"github.com/kyh0703/portfoilo-media/internal/pkg/httpx"
 	"go.uber.org/zap"
 )
 
@@ -71,17 +67,19 @@ func (f appFakeSessionUsecase) GetHealth(ctx context.Context) error {
 func (testHandler) Table() []handler.Mapper {
 	return []handler.Mapper{
 		{
-			Method: fiber.MethodPost,
-			Path:   "/sessions/:sessionId/join",
-			Handler: []fiber.Handler{func(c *fiber.Ctx) error {
-				return c.SendStatus(fiber.StatusNoContent)
-			}},
+			Method: http.MethodPost,
+			Path:   "/sessions/{sessionId}/join",
+			Handler: func(w http.ResponseWriter, r *http.Request) error {
+				_ = r
+				w.WriteHeader(http.StatusNoContent)
+				return nil
+			},
 		},
 	}
 }
 
-func TestNewFiberHandlesCORSPreflightForJoin(t *testing.T) {
-	app := NewFiber(FiberParams{
+func TestNewHTTPHandlerHandlesCORSPreflightForJoin(t *testing.T) {
+	app := NewHTTPHandler(HTTPParams{
 		Config: &configs.Config{
 			App: configs.AppConfig{Name: "test"},
 			Server: configs.ServerConfig{
@@ -94,7 +92,7 @@ func TestNewFiberHandlesCORSPreflightForJoin(t *testing.T) {
 			},
 		},
 		Logger:        zap.NewNop(),
-		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
+		RequestLogger: httpx.NewRequestLogger(zap.NewNop()),
 		Handlers:      []handler.Handler{testHandler{}},
 	})
 
@@ -103,10 +101,7 @@ func TestNewFiberHandlesCORSPreflightForJoin(t *testing.T) {
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
 	req.Header.Set("Access-Control-Request-Headers", "authorization,content-type")
 
-	res, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
-	}
+	res := serve(app, req)
 	defer func() {
 		_ = res.Body.Close()
 	}()
@@ -125,8 +120,8 @@ func TestNewFiberHandlesCORSPreflightForJoin(t *testing.T) {
 	}
 }
 
-func TestNewFiberExposesJoinResponseHeaders(t *testing.T) {
-	app := NewFiber(FiberParams{
+func TestNewHTTPHandlerExposesJoinResponseHeaders(t *testing.T) {
+	app := NewHTTPHandler(HTTPParams{
 		Config: &configs.Config{
 			App: configs.AppConfig{Name: "test"},
 			Server: configs.ServerConfig{
@@ -139,17 +134,14 @@ func TestNewFiberExposesJoinResponseHeaders(t *testing.T) {
 			},
 		},
 		Logger:        zap.NewNop(),
-		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
+		RequestLogger: httpx.NewRequestLogger(zap.NewNop()),
 		Handlers:      []handler.Handler{testHandler{}},
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/session-1/join", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 
-	res, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
-	}
+	res := serve(app, req)
 	defer func() {
 		_ = res.Body.Close()
 	}()
@@ -170,74 +162,18 @@ func TestNewFiberExposesJoinResponseHeaders(t *testing.T) {
 	}
 }
 
-func TestNewFiberExposesPrometheusMetricsWhenEnabled(t *testing.T) {
-	app := NewFiber(FiberParams{
+func TestNewHTTPHandlerDoesNotExposeMetricsEndpoint(t *testing.T) {
+	app := NewHTTPHandler(HTTPParams{
 		Config: &configs.Config{
-			App: configs.AppConfig{Name: "test"},
-			Server: configs.ServerConfig{
-				CORS: configs.CORSConfig{
-					AllowedOrigins: []string{"*"},
-					AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
-					AllowedHeaders: []string{"Authorization", "Content-Type"},
-				},
-			},
-			Observability: configs.ObservabilityConfig{MetricsEnabled: true},
+			App:    configs.AppConfig{Name: "test"},
+			Server: configs.ServerConfig{},
 		},
 		Logger:        zap.NewNop(),
-		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
+		RequestLogger: httpx.NewRequestLogger(zap.NewNop()),
 		Handlers:      []handler.Handler{testHandler{}},
-		Session: appFakeSessionUsecase{
-			stats: sessiondto.RuntimeStatsResponse{
-				Rooms:        1,
-				Sessions:     1,
-				Participants: 2,
-				Tracks:       3,
-				ByStatus:     map[string]int{"active": 1},
-			},
-		},
 	})
 
-	res, err := app.Test(httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
-	}
-	defer func() {
-		_ = res.Body.Close()
-	}()
-
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusOK)
-	}
-	if got := res.Header.Get("Content-Type"); !strings.Contains(got, "text/plain") {
-		t.Fatalf("Content-Type = %q, want text/plain", got)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatalf("ReadAll() error = %v", err)
-	}
-	if !strings.Contains(string(body), "dubu_media_participants 2") {
-		t.Fatalf("metrics body missing participant gauge:\n%s", string(body))
-	}
-}
-
-func TestNewFiberDoesNotExposePrometheusMetricsWhenDisabled(t *testing.T) {
-	app := NewFiber(FiberParams{
-		Config: &configs.Config{
-			App:           configs.AppConfig{Name: "test"},
-			Server:        configs.ServerConfig{},
-			Observability: configs.ObservabilityConfig{MetricsEnabled: false},
-		},
-		Logger:        zap.NewNop(),
-		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
-		Handlers:      []handler.Handler{testHandler{}},
-		Session:       appFakeSessionUsecase{},
-	})
-
-	res, err := app.Test(httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
-	}
+	res := serve(app, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	defer func() {
 		_ = res.Body.Close()
 	}()
@@ -247,39 +183,8 @@ func TestNewFiberDoesNotExposePrometheusMetricsWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestNewFiberReturnsCommonErrorWhenPrometheusMetricsFail(t *testing.T) {
-	app := NewFiber(FiberParams{
-		Config: &configs.Config{
-			App:           configs.AppConfig{Name: "test"},
-			Server:        configs.ServerConfig{},
-			Observability: configs.ObservabilityConfig{MetricsEnabled: true},
-		},
-		Logger:        zap.NewNop(),
-		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
-		Handlers:      []handler.Handler{testHandler{}},
-		Session:       appFakeSessionUsecase{err: errors.New("stats unavailable")},
-	})
-
-	res, err := app.Test(httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
-	}
-	defer func() {
-		_ = res.Body.Close()
-	}()
-
-	if res.StatusCode != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusInternalServerError)
-	}
-
-	var body struct {
-		StatusCode int    `json:"statusCode"`
-		Message    string `json:"message"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
-		t.Fatalf("Decode() error = %v", err)
-	}
-	if body.StatusCode != http.StatusInternalServerError {
-		t.Fatalf("statusCode = %d, want %d", body.StatusCode, http.StatusInternalServerError)
-	}
+func serve(app http.Handler, req *http.Request) *http.Response {
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	return rec.Result()
 }

@@ -16,6 +16,8 @@ import (
 )
 
 //go:generate go tool counterfeiter -generate
+//counterfeiter:generate . RealtimeCallCreator
+//counterfeiter:generate . RealtimeCallHanger
 //counterfeiter:generate . RealtimeCallManager
 
 type RealtimeClient struct {

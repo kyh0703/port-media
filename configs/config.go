@@ -89,5 +89,4 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("realtime.room_idle_timeout", "2m")
 	v.SetDefault("realtime.ice_gathering_timeout", "5s")
 	v.SetDefault("realtime.realtime_event_history_limit", 10)
-	v.SetDefault("observability.metrics_enabled", true)
 }

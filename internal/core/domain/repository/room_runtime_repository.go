@@ -7,6 +7,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 )
 
+//counterfeiter:generate . RoomRuntimeRepository
 type RoomRuntimeRepository interface {
 	Save(ctx context.Context, room entity.Room) error
 	FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.Room, bool, error)

@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
@@ -23,66 +25,70 @@ func NewSessionsHandler(session usecase.SessionUsecase, tokenVerifier auth.Media
 
 func (h *SessionsHandler) Table() []Mapper {
 	return []Mapper{
-		{Method: fiber.MethodPost, Path: "/sessions", Handler: []fiber.Handler{h.Create}},
-		{Method: fiber.MethodGet, Path: "/sessions/:sessionId/status", Handler: []fiber.Handler{h.GetStatus}},
-		{Method: fiber.MethodPost, Path: "/sessions/:sessionId/join", Handler: []fiber.Handler{h.Join}},
-		{Method: fiber.MethodPost, Path: "/sessions/:sessionId/participants/:participantId/leave", Handler: []fiber.Handler{h.LeaveParticipant}},
-		{Method: fiber.MethodPost, Path: "/sessions/:sessionId/end", Handler: []fiber.Handler{h.End}},
+		{Method: http.MethodPost, Path: "/sessions", Handler: h.Create},
+		{Method: http.MethodGet, Path: "/sessions/{sessionId}/status", Handler: h.GetStatus},
+		{Method: http.MethodPost, Path: "/sessions/{sessionId}/join", Handler: h.Join},
+		{Method: http.MethodPost, Path: "/sessions/{sessionId}/participants/{participantId}/leave", Handler: h.LeaveParticipant},
+		{Method: http.MethodPost, Path: "/sessions/{sessionId}/end", Handler: h.End},
 	}
 }
 
-func (h *SessionsHandler) Create(c *fiber.Ctx) error {
+func (h *SessionsHandler) Create(w http.ResponseWriter, r *http.Request) error {
 	var req sessiondto.CreateSessionRequest
-	if err := c.BodyParser(&req); err != nil {
-		return exception.New(exception.CodeBadRequest, "invalid session request", fiber.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return exception.New(exception.CodeBadRequest, "invalid session request", http.StatusBadRequest)
 	}
 
-	res, err := h.session.CreateSession(c.Context(), req)
+	res, err := h.session.CreateSession(r.Context(), req)
 	if err != nil {
 		return err
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(response.Created(res))
+	return response.WriteJSON(w, http.StatusCreated, response.Created(res))
 }
 
-func (h *SessionsHandler) GetStatus(c *fiber.Ctx) error {
-	claims, err := h.verifySessionToken(c)
+func (h *SessionsHandler) GetStatus(w http.ResponseWriter, r *http.Request) error {
+	claims, err := h.verifySessionToken(r)
 	if err != nil {
 		return err
 	}
 
-	res, found, err := h.session.GetSessionStatus(c.Context(), sessiondto.GetSessionStatusRequest{
+	res, found, err := h.session.GetSessionStatus(r.Context(), sessiondto.GetSessionStatusRequest{
 		SessionID: claims.SessionID,
 	})
 	if err != nil {
 		if errors.Is(err, usecase.ErrSessionNotFound) {
-			return exception.New(exception.CodeNotFound, "media session not found", fiber.StatusNotFound)
+			return exception.New(exception.CodeNotFound, "media session not found", http.StatusNotFound)
 		}
 		return err
 	}
 	if !found {
-		return exception.New(exception.CodeNotFound, "media session status not found", fiber.StatusNotFound)
+		return exception.New(exception.CodeNotFound, "media session status not found", http.StatusNotFound)
 	}
 
-	return c.JSON(response.OK(res))
+	return response.WriteJSON(w, http.StatusOK, response.OK(res))
 }
 
-func (h *SessionsHandler) Join(c *fiber.Ctx) error {
-	claims, err := h.verifySessionToken(c)
+func (h *SessionsHandler) Join(w http.ResponseWriter, r *http.Request) error {
+	claims, err := h.verifySessionToken(r)
 	if err != nil {
 		return err
 	}
 
-	sdp := string(c.Body())
-	if sdp == "" {
-		return exception.New(exception.CodeBadRequest, "empty join SDP", fiber.StatusBadRequest)
-	}
-	audioMode, err := parseAudioMode(c.Query("mode", string(sessiondto.AudioModePublisher)))
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		return exception.New(exception.CodeBadRequest, "invalid join mode", fiber.StatusBadRequest)
+		return err
+	}
+	sdp := string(body)
+	if sdp == "" {
+		return exception.New(exception.CodeBadRequest, "empty join SDP", http.StatusBadRequest)
+	}
+	audioMode, err := parseAudioMode(r.URL.Query().Get("mode"))
+	if err != nil {
+		return exception.New(exception.CodeBadRequest, "invalid join mode", http.StatusBadRequest)
 	}
 
-	res, err := h.session.AcceptOffer(c.Context(), sessiondto.AcceptOfferRequest{
+	res, err := h.session.AcceptOffer(r.Context(), sessiondto.AcceptOfferRequest{
 		SessionID:      claims.SessionID,
 		ConversationID: claims.ConversationID,
 		UserID:         claims.UserID,
@@ -93,38 +99,39 @@ func (h *SessionsHandler) Join(c *fiber.Ctx) error {
 		return err
 	}
 
-	c.Set(fiber.HeaderContentType, "application/sdp")
-	c.Set("X-Room-Id", res.RoomID)
-	c.Set("X-Participant-Id", res.ParticipantID)
-	return c.SendString(res.SDPAnswer)
+	w.Header().Set("Content-Type", "application/sdp")
+	w.Header().Set("X-Room-Id", res.RoomID)
+	w.Header().Set("X-Participant-Id", res.ParticipantID)
+	_, err = io.WriteString(w, res.SDPAnswer)
+	return err
 }
 
-func (h *SessionsHandler) LeaveParticipant(c *fiber.Ctx) error {
-	claims, err := h.verifySessionToken(c)
+func (h *SessionsHandler) LeaveParticipant(w http.ResponseWriter, r *http.Request) error {
+	claims, err := h.verifySessionToken(r)
 	if err != nil {
 		return err
 	}
 
-	res, err := h.session.LeaveParticipant(c.Context(), sessiondto.LeaveParticipantRequest{
+	res, err := h.session.LeaveParticipant(r.Context(), sessiondto.LeaveParticipantRequest{
 		SessionID:      claims.SessionID,
 		ConversationID: claims.ConversationID,
 		UserID:         claims.UserID,
-		ParticipantID:  c.Params("participantId"),
+		ParticipantID:  r.PathValue("participantId"),
 	})
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(response.OK(res))
+	return response.WriteJSON(w, http.StatusOK, response.OK(res))
 }
 
-func (h *SessionsHandler) End(c *fiber.Ctx) error {
-	claims, err := h.verifySessionToken(c)
+func (h *SessionsHandler) End(w http.ResponseWriter, r *http.Request) error {
+	claims, err := h.verifySessionToken(r)
 	if err != nil {
 		return err
 	}
 
-	res, err := h.session.EndSession(c.Context(), sessiondto.EndSessionRequest{
+	res, err := h.session.EndSession(r.Context(), sessiondto.EndSessionRequest{
 		SessionID:      claims.SessionID,
 		ConversationID: claims.ConversationID,
 		UserID:         claims.UserID,
@@ -133,16 +140,16 @@ func (h *SessionsHandler) End(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(response.OK(res))
+	return response.WriteJSON(w, http.StatusOK, response.OK(res))
 }
 
-func (h *SessionsHandler) verifySessionToken(c *fiber.Ctx) (auth.MediaToken, error) {
-	claims, err := h.tokenVerifier.Verify(c.Context(), readBearerToken(c.Get(fiber.HeaderAuthorization)))
+func (h *SessionsHandler) verifySessionToken(r *http.Request) (auth.MediaToken, error) {
+	claims, err := h.tokenVerifier.Verify(r.Context(), readBearerToken(r.Header.Get("Authorization")))
 	if err != nil {
-		return auth.MediaToken{}, exception.New(exception.CodeUnauthorized, "invalid media token", fiber.StatusUnauthorized)
+		return auth.MediaToken{}, exception.New(exception.CodeUnauthorized, "invalid media token", http.StatusUnauthorized)
 	}
-	if claims.SessionID != c.Params("sessionId") {
-		return auth.MediaToken{}, exception.New(exception.CodeUnauthorized, "media token session mismatch", fiber.StatusUnauthorized)
+	if claims.SessionID != r.PathValue("sessionId") {
+		return auth.MediaToken{}, exception.New(exception.CodeUnauthorized, "media token session mismatch", http.StatusUnauthorized)
 	}
 
 	return claims, nil
@@ -164,6 +171,6 @@ func parseAudioMode(mode string) (sessiondto.AudioMode, error) {
 	case "listener", "listen_only", "listen-only":
 		return sessiondto.AudioModeListener, nil
 	default:
-		return "", exception.New(exception.CodeBadRequest, "invalid join mode", fiber.StatusBadRequest)
+		return "", exception.New(exception.CodeBadRequest, "invalid join mode", http.StatusBadRequest)
 	}
 }

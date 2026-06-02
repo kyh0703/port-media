@@ -6,12 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
-	domainrepo "github.com/kyh0703/portfoilo-media/internal/core/domain/repository"
+	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository/repositoryfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	corerepo "github.com/kyh0703/portfoilo-media/internal/core/repository"
@@ -54,7 +55,7 @@ func TestJoinEndpointSmokeWithPionClient(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	clientPeer, offerSDP := newSmokeClientOffer(t)
@@ -199,58 +200,72 @@ func (p *smokeRealtimeProvider) HangupCall(ctx context.Context, providerCallID s
 	return nil
 }
 
-type smokeRoomRepository struct {
-	rooms map[vo.RoomID]entity.Room
-}
+func newSmokeRoomRepository() *repositoryfakes.FakeRoomRepository {
+	var mu sync.RWMutex
+	rooms := make(map[vo.RoomID]entity.Room)
+	repo := &repositoryfakes.FakeRoomRepository{}
 
-func newSmokeRoomRepository() domainrepo.RoomRepository {
-	return &smokeRoomRepository{rooms: make(map[vo.RoomID]entity.Room)}
-}
+	repo.SaveCalls(func(ctx context.Context, room entity.Room) error {
+		_ = ctx
+		mu.Lock()
+		defer mu.Unlock()
 
-func (r *smokeRoomRepository) Save(ctx context.Context, room entity.Room) error {
-	_ = ctx
-	r.rooms[room.ID] = room
-	return nil
-}
+		rooms[room.ID] = room
+		return nil
+	})
+	repo.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.Room, bool, error) {
+		_ = ctx
+		mu.RLock()
+		defer mu.RUnlock()
 
-func (r *smokeRoomRepository) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.Room, bool, error) {
-	_ = ctx
-	for _, room := range r.rooms {
-		if room.SessionID == sessionID {
-			return room, true, nil
+		for _, room := range rooms {
+			if room.SessionID == sessionID {
+				return room, true, nil
+			}
 		}
-	}
-	return entity.Room{}, false, nil
+		return entity.Room{}, false, nil
+	})
+	repo.DeleteCalls(func(ctx context.Context, roomID vo.RoomID) error {
+		_ = ctx
+		mu.Lock()
+		defer mu.Unlock()
+
+		delete(rooms, roomID)
+		return nil
+	})
+
+	return repo
 }
 
-func (r *smokeRoomRepository) Delete(ctx context.Context, roomID vo.RoomID) error {
-	_ = ctx
-	delete(r.rooms, roomID)
-	return nil
-}
+func newSmokeMediaSessionStateRepository() *repositoryfakes.FakeMediaSessionStateRepository {
+	var mu sync.RWMutex
+	states := make(map[vo.SessionID]entity.MediaSessionState)
+	repo := &repositoryfakes.FakeMediaSessionStateRepository{}
 
-type smokeMediaSessionStateRepository struct {
-	states map[vo.SessionID]entity.MediaSessionState
-}
+	repo.SaveCalls(func(ctx context.Context, state entity.MediaSessionState) error {
+		_ = ctx
+		mu.Lock()
+		defer mu.Unlock()
 
-func newSmokeMediaSessionStateRepository() domainrepo.MediaSessionStateRepository {
-	return &smokeMediaSessionStateRepository{states: make(map[vo.SessionID]entity.MediaSessionState)}
-}
+		states[state.SessionID] = state
+		return nil
+	})
+	repo.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+		_ = ctx
+		mu.RLock()
+		defer mu.RUnlock()
 
-func (r *smokeMediaSessionStateRepository) Save(ctx context.Context, state entity.MediaSessionState) error {
-	_ = ctx
-	r.states[state.SessionID] = state
-	return nil
-}
+		state, found := states[sessionID]
+		return state, found, nil
+	})
+	repo.DeleteCalls(func(ctx context.Context, sessionID vo.SessionID) error {
+		_ = ctx
+		mu.Lock()
+		defer mu.Unlock()
 
-func (r *smokeMediaSessionStateRepository) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
-	_ = ctx
-	state, found := r.states[sessionID]
-	return state, found, nil
-}
+		delete(states, sessionID)
+		return nil
+	})
 
-func (r *smokeMediaSessionStateRepository) Delete(ctx context.Context, sessionID vo.SessionID) error {
-	_ = ctx
-	delete(r.states, sessionID)
-	return nil
+	return repo
 }

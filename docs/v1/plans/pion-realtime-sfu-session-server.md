@@ -142,11 +142,10 @@
 
 ### Task T8
 
-- Goal: Add monitoring-ready structured logs, health endpoints, and lightweight metrics primitives for session, participant, track, and connection state.
+- Goal: Add monitoring-ready structured logs and health endpoints for session, participant, track, and connection state.
 - Depends on:
   - T7
 - Write Scope:
-  - internal/observability/**
   - internal/server/**
   - README.md
 - Read Context:
@@ -154,7 +153,7 @@
   - internal/server/**
   - internal/contracts/**
 - Checks:
-  - rtk go test ./internal/observability/... ./internal/server/...
+  - rtk go test ./internal/server/...
   - rtk go test ./...
 - Parallel-safe: no
 

@@ -2,7 +2,7 @@ version: "3"
 
 vars:
   TARGET: portfoilo-media
-  CMD: ./cmd/app
+  CMD: ./cmd/api
 
 tasks:
   default:

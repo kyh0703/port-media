@@ -7,8 +7,11 @@ import (
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 )
 
+//go:generate go tool counterfeiter -generate
+
 var ErrSessionNotFound = errors.New("media session not found")
 
+//counterfeiter:generate . SessionUsecase
 type SessionUsecase interface {
 	CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error)
 	AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferRequest) (sessiondto.AcceptOfferResponse, error)

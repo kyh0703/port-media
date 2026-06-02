@@ -7,6 +7,8 @@ import (
 	"github.com/uptrace/bun"
 )
 
+//go:generate go tool counterfeiter -generate
+
 const (
 	StatusOK       = "ok"
 	StatusDegraded = "degraded"
@@ -23,6 +25,7 @@ type Result struct {
 	Checks map[string]DependencyCheck `json:"checks"`
 }
 
+//counterfeiter:generate . Checker
 type Checker interface {
 	Check(ctx context.Context) Result
 }

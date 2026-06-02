@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
+	"github.com/kyh0703/portfoilo-media/internal/pkg/httpx"
 	"go.uber.org/zap"
 )
 
@@ -109,7 +109,7 @@ func TestSessionsHandlerGetsSessionStatusWithMediaToken(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/sessions/session-1/status", nil)
@@ -146,7 +146,7 @@ func TestSessionsHandlerEndsSessionWithMediaToken(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/sessions/session-1/end", nil)
@@ -187,7 +187,7 @@ func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	req := httptest.NewRequest(
@@ -252,7 +252,7 @@ func TestSessionsHandlerAcceptsListenerJoinMode(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	req := httptest.NewRequest(
@@ -292,7 +292,7 @@ func TestSessionsHandlerLeavesParticipantWithMediaToken(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/sessions/session-1/participants/participant-1/leave", nil)
@@ -347,7 +347,7 @@ func TestSessionsHandlerRejectsJoinWithoutMediaToken(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	req := httptest.NewRequest(
@@ -400,7 +400,7 @@ func TestSessionsHandlerRejectsSessionMismatch(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	req := httptest.NewRequest(
@@ -424,8 +424,20 @@ func TestSessionsHandlerRejectsSessionMismatch(t *testing.T) {
 	}
 }
 
-func newTestApp() *fiber.App {
-	return fiber.New(fiber.Config{
-		ErrorHandler: exception.NewErrorHandler(zap.NewNop()),
-	})
+type testApp struct {
+	mux *http.ServeMux
+}
+
+func newTestApp() *testApp {
+	return &testApp{mux: http.NewServeMux()}
+}
+
+func (a *testApp) Add(method string, path string, h ErrorHandlerFunc) {
+	a.mux.Handle(method+" "+path, httpx.WithErrorHandler(h, exception.NewHTTPErrorHandler(zap.NewNop())))
+}
+
+func (a *testApp) Test(req *http.Request, _ ...int) (*http.Response, error) {
+	rec := httptest.NewRecorder()
+	a.mux.ServeHTTP(rec, req)
+	return rec.Result(), nil
 }

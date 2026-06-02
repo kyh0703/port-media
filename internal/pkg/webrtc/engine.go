@@ -17,7 +17,12 @@ import (
 )
 
 //go:generate go tool counterfeiter -generate
+//counterfeiter:generate . OfferAcceptor
+//counterfeiter:generate . OfferCreator
 //counterfeiter:generate . PeerConnectionFactory
+//counterfeiter:generate . AnswerApplier
+//counterfeiter:generate . SessionCloser
+//counterfeiter:generate . ParticipantCloser
 
 type OfferAcceptor interface {
 	AcceptOffer(ctx context.Context, input OfferInput) (*Peer, error)

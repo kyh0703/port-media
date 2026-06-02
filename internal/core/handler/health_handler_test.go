@@ -32,7 +32,7 @@ func TestHealthHandlerReturnsCommonOKResponse(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	res, err := app.Test(httptest.NewRequest(http.MethodGet, "/health", nil))
@@ -79,7 +79,7 @@ func TestHealthHandlerReturnsCommonDegradedResponse(t *testing.T) {
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
-		app.Add(route.Method, route.Path, route.Handler...)
+		app.Add(route.Method, route.Path, route.Handler)
 	}
 
 	res, err := app.Test(httptest.NewRequest(http.MethodGet, "/health", nil))

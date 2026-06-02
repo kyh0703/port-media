@@ -9,13 +9,13 @@
   - `portfoilo-media` can connect a matching OpenAI Realtime participant for the session.
   - Client audio is forwarded to OpenAI Realtime and OpenAI audio is forwarded back to the client.
   - `portfoilo-media` stores live media session status in Redis for `dubu-api` lookup.
-  - The system exposes enough logs and Prometheus `/metrics` fields to support later monitoring.
+  - The system exposes enough logs and Redis live-state fields to support later monitoring.
 
 ## Upcoming Versions
 
 - `v2`:
   - Goal: Add monitoring-oriented participant/session views and operational metrics.
-  - Dependencies: v1 room/session lifecycle events and stable media server metrics.
+  - Dependencies: v1 room/session lifecycle events and stable media server live state.
 - `v3`:
   - Goal: Support multiple client or monitor participants in a room.
   - Dependencies: v1 SFU participant/track abstraction and v2 monitoring visibility.
@@ -30,7 +30,7 @@
   - Multi-client room UI.
   - Raw media recording or archival.
   - Redis-backed SFU cluster coordination beyond single-node live state.
-  - Alerting dashboard and long-term metrics storage.
+  - Alerting dashboard and long-term operational telemetry storage.
 - Open sequencing questions:
   - Whether monitor participants should receive live audio, metadata only, or delayed transcripts.
   - Whether session routing should stay API-driven or move behind a dedicated media coordinator.

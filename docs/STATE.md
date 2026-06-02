@@ -27,4 +27,4 @@ current_version: v1
 
 ## Open Follow-ups
 
-- Decide whether production should scrape Prometheus `/metrics` directly or route it through OpenTelemetry Collector.
+- Decide whether production monitoring should read Redis live state, structured logs, or a future metrics backend.

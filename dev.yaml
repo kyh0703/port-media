@@ -65,6 +65,3 @@ realtime:
   room_idle_timeout: 2m
   ice_gathering_timeout: 5s
   realtime_event_history_limit: 10
-
-observability:
-  metrics_enabled: true

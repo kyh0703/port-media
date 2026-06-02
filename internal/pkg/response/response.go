@@ -1,5 +1,10 @@
 package response
 
+import (
+	"encoding/json"
+	"net/http"
+)
+
 type Body struct {
 	StatusCode int    `json:"statusCode"`
 	Message    string `json:"message"`
@@ -30,4 +35,14 @@ func Error(statusCode int, message string, err any) Body {
 		Error:      err,
 		Data:       nil,
 	}
+}
+
+func WriteJSON(w http.ResponseWriter, statusCode int, body any) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	return json.NewEncoder(w).Encode(body)
+}
+
+func WriteError(w http.ResponseWriter, statusCode int, message string, err any) error {
+	return WriteJSON(w, statusCode, Error(statusCode, message, err))
 }

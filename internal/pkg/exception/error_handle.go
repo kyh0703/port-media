@@ -2,27 +2,23 @@ package exception
 
 import (
 	"errors"
+	"net/http"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/response"
 	"go.uber.org/zap"
 )
 
-func NewErrorHandler(log *zap.Logger) fiber.ErrorHandler {
-	return func(c *fiber.Ctx, err error) error {
+func NewHTTPErrorHandler(log *zap.Logger) func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		_ = r
+
 		var appErr AppError
 		if errors.As(err, &appErr) {
-			return c.Status(appErr.Status).JSON(response.Error(appErr.Status, appErr.Message, appErr.Code))
-		}
-
-		var fiberErr *fiber.Error
-		if errors.As(err, &fiberErr) {
-			return c.Status(fiberErr.Code).JSON(response.Error(fiberErr.Code, fiberErr.Message, CodeBadRequest))
+			_ = response.WriteError(w, appErr.Status, appErr.Message, appErr.Code)
+			return
 		}
 
 		log.Error("unhandled request error", zap.Error(err))
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			response.Error(fiber.StatusInternalServerError, "internal server error", CodeInternalError),
-		)
+		_ = response.WriteError(w, http.StatusInternalServerError, "internal server error", CodeInternalError)
 	}
 }

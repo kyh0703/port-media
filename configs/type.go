@@ -13,7 +13,6 @@ type Config struct {
 	MediaServer   MediaServerConfig   `mapstructure:"media_server"`
 	Events        EventsConfig        `mapstructure:"events"`
 	Realtime      RealtimeConfig      `mapstructure:"realtime"`
-	Observability ObservabilityConfig `mapstructure:"observability"`
 }
 
 type AppConfig struct {
@@ -84,8 +83,4 @@ type RealtimeConfig struct {
 	RoomIdleTimeout           time.Duration `mapstructure:"room_idle_timeout"`
 	ICEGatheringTimeout       time.Duration `mapstructure:"ice_gathering_timeout"`
 	RealtimeEventHistoryLimit int           `mapstructure:"realtime_event_history_limit"`
-}
-
-type ObservabilityConfig struct {
-	MetricsEnabled bool `mapstructure:"metrics_enabled"`
 }

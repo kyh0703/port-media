@@ -1,7 +1,8 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"net/http"
+
 	"github.com/kyh0703/portfoilo-media/internal/pkg/health"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/response"
 )
@@ -16,19 +17,19 @@ func NewHealthHandler(checker health.Checker) *HealthHandler {
 
 func (h *HealthHandler) Table() []Mapper {
 	return []Mapper{
-		{Method: fiber.MethodGet, Path: "/health", Handler: []fiber.Handler{h.Get}},
+		{Method: http.MethodGet, Path: "/health", Handler: h.Get},
 	}
 }
 
-func (h *HealthHandler) Get(c *fiber.Ctx) error {
-	result := h.checker.Check(c.Context())
+func (h *HealthHandler) Get(w http.ResponseWriter, r *http.Request) error {
+	result := h.checker.Check(r.Context())
 	if result.Status != health.StatusOK {
-		return c.Status(fiber.StatusServiceUnavailable).JSON(response.Success(
-			fiber.StatusServiceUnavailable,
+		return response.WriteJSON(w, http.StatusServiceUnavailable, response.Success(
+			http.StatusServiceUnavailable,
 			"Service Unavailable",
 			result,
 		))
 	}
 
-	return c.JSON(response.OK(result))
+	return response.WriteJSON(w, http.StatusOK, response.OK(result))
 }

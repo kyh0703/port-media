@@ -21,6 +21,9 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:generate go tool counterfeiter -generate
+//counterfeiter:generate . Service
+
 type Service interface {
 	CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error)
 	AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferRequest) (sessiondto.AcceptOfferResponse, error)
