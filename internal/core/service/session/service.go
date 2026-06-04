@@ -193,58 +193,24 @@ func (s *service) AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferReq
 	unlock := s.lockSession(sessionID)
 	defer unlock()
 
-	room, found, err := s.runtime.FindBySessionID(ctx, sessionID)
+	room, err := s.findSessionRoom(ctx, sessionID)
 	if err != nil {
 		return sessiondto.AcceptOfferResponse{}, err
-	}
-	if !found {
-		room, found, err = s.rooms.FindBySessionID(ctx, sessionID)
-		if err != nil {
-			return sessiondto.AcceptOfferResponse{}, err
-		}
-		if !found {
-			return sessiondto.AcceptOfferResponse{}, usecase.ErrSessionNotFound
-		}
 	}
 	publishAudio := req.PublishesAudio()
 	room.SetUserID(req.UserID, now)
 
-	participantID := vo.NewParticipantID()
-	peer, err := s.media.AcceptOffer(ctx, rtc.OfferInput{
-		SessionID:               sessionID,
-		ParticipantID:           participantID,
-		Role:                    vo.ParticipantRoleClient,
-		SDP:                     req.SDP,
-		PublishAudio:            publishAudio,
-		OnConnectionStateChange: s.handleConnectionStateChange,
-		OnMediaTrackStateChange: s.handleMediaTrackStateChange,
-	})
+	participant, peer, err := s.acceptClientParticipant(ctx, sessionID, req.SDP, publishAudio, now)
 	if err != nil {
 		return sessiondto.AcceptOfferResponse{}, err
 	}
-
-	participant := entity.NewParticipant(participantID, vo.ParticipantRoleClient, now)
-	participant.SetState(vo.ConnectionStateConnecting, now)
-	participant.SetPublishAudio(publishAudio, now)
-	participant.AddTrack(entity.NewTrack(vo.NewTrackID(), vo.TrackKindAudio, now), now)
 	room.AddParticipant(participant, now)
 
-	if !room.HasParticipantRole(vo.ParticipantRoleOpenAIAgent) {
-		openAIParticipant, err := s.connectOpenAIParticipant(ctx, sessionID, now)
-		if err != nil {
-			_ = s.failRoom(ctx, room, req.UserID, now, "openai_setup_failed")
-			return sessiondto.AcceptOfferResponse{}, err
-		}
-		room.AddParticipant(openAIParticipant, now)
+	if err := s.ensureOpenAIParticipant(ctx, &room, sessionID, req.UserID, now); err != nil {
+		return sessiondto.AcceptOfferResponse{}, err
 	}
 
-	if err := s.runtime.Save(ctx, room); err != nil {
-		return sessiondto.AcceptOfferResponse{}, err
-	}
-	if err := s.rooms.Save(ctx, room); err != nil {
-		return sessiondto.AcceptOfferResponse{}, err
-	}
-	if err := s.states.Save(ctx, s.mediaSessionState(room, req.UserID, now)); err != nil {
+	if err := s.saveActiveRoomState(ctx, room, req.UserID, now); err != nil {
 		return sessiondto.AcceptOfferResponse{}, err
 	}
 
@@ -264,8 +230,92 @@ func (s *service) AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferReq
 	return sessiondto.AcceptOfferResponse{
 		SDPAnswer:     peer.AnswerSDP,
 		RoomID:        string(room.ID),
-		ParticipantID: string(participantID),
+		ParticipantID: string(participant.ID),
 	}, nil
+}
+
+func (s *service) findSessionRoom(ctx context.Context, sessionID vo.SessionID) (entity.Room, error) {
+	room, found, err := s.runtime.FindBySessionID(ctx, sessionID)
+	if err != nil {
+		return entity.Room{}, err
+	}
+	if found {
+		return room, nil
+	}
+
+	room, found, err = s.rooms.FindBySessionID(ctx, sessionID)
+	if err != nil {
+		return entity.Room{}, err
+	}
+	if !found {
+		return entity.Room{}, usecase.ErrSessionNotFound
+	}
+	return room, nil
+}
+
+func (s *service) acceptClientParticipant(
+	ctx context.Context,
+	sessionID vo.SessionID,
+	sdp string,
+	publishAudio bool,
+	now time.Time,
+) (entity.Participant, *rtc.Peer, error) {
+	participantID := vo.NewParticipantID()
+	peer, err := s.media.AcceptOffer(ctx, rtc.OfferInput{
+		SessionID:               sessionID,
+		ParticipantID:           participantID,
+		Role:                    vo.ParticipantRoleClient,
+		SDP:                     sdp,
+		PublishAudio:            publishAudio,
+		OnConnectionStateChange: s.handleConnectionStateChange,
+		OnMediaTrackStateChange: s.handleMediaTrackStateChange,
+	})
+	if err != nil {
+		return entity.Participant{}, nil, err
+	}
+
+	return newClientParticipant(participantID, publishAudio, now), peer, nil
+}
+
+func newClientParticipant(participantID vo.ParticipantID, publishAudio bool, now time.Time) entity.Participant {
+	participant := entity.NewParticipant(participantID, vo.ParticipantRoleClient, now)
+	participant.SetState(vo.ConnectionStateConnecting, now)
+	participant.SetPublishAudio(publishAudio, now)
+	participant.AddTrack(entity.NewTrack(vo.NewTrackID(), vo.TrackKindAudio, now), now)
+	return participant
+}
+
+func (s *service) ensureOpenAIParticipant(
+	ctx context.Context,
+	room *entity.Room,
+	sessionID vo.SessionID,
+	userID string,
+	now time.Time,
+) error {
+	if room.HasParticipantRole(vo.ParticipantRoleOpenAIAgent) {
+		return nil
+	}
+
+	openAIParticipant, err := s.connectOpenAIParticipant(ctx, sessionID, now)
+	if err != nil {
+		_ = s.failRoom(ctx, *room, userID, now, "openai_setup_failed")
+		return err
+	}
+	room.AddParticipant(openAIParticipant, now)
+	return nil
+}
+
+func (s *service) saveActiveRoomState(ctx context.Context, room entity.Room, userID string, now time.Time) error {
+	if err := s.runtime.Save(ctx, room); err != nil {
+		return err
+	}
+	if err := s.rooms.Save(ctx, room); err != nil {
+		return err
+	}
+	if err := s.states.Save(ctx, s.mediaSessionState(room, userID, now)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *service) lockSession(sessionID vo.SessionID) func() {

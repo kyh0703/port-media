@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/kyh0703/portfoilo-media/configs"
-	"github.com/kyh0703/portfoilo-media/internal/core/handler"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/httpx"
 	"go.uber.org/fx"

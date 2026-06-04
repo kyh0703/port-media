@@ -2,8 +2,9 @@ package main
 
 import (
 	"github.com/kyh0703/portfoilo-media/configs"
-	"github.com/kyh0703/portfoilo-media/internal/core/handler"
-	"github.com/kyh0703/portfoilo-media/internal/core/repository"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/lifecycle"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/out/repository"
 	"github.com/kyh0703/portfoilo-media/internal/core/service"
 	pkg "github.com/kyh0703/portfoilo-media/internal/pkg"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
@@ -22,6 +23,7 @@ func main() {
 		rtc.Module,
 		repository.Module,
 		service.Module,
+		lifecycle.Module,
 		httpx.Module,
 		handler.Module,
 		Module,

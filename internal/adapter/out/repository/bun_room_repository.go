@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/kyh0703/portfoilo-media/internal/adapter/out/repository/model"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	domainrepo "github.com/kyh0703/portfoilo-media/internal/core/domain/repository"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	"github.com/kyh0703/portfoilo-media/internal/core/repository/model"
 	"github.com/uptrace/bun"
 )
 

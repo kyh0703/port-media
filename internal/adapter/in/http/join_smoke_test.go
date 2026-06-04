@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/configs"
+	corerepo "github.com/kyh0703/portfoilo-media/internal/adapter/out/repository"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository/repositoryfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
-	corerepo "github.com/kyh0703/portfoilo-media/internal/core/repository"
 	sessionservice "github.com/kyh0703/portfoilo-media/internal/core/service/session"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/openai"

@@ -4,7 +4,7 @@ package handlerfakes
 import (
 	"sync"
 
-	"github.com/kyh0703/portfoilo-media/internal/core/handler"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http"
 )
 
 type FakeHandler struct {

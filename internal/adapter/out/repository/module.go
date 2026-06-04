@@ -8,6 +8,7 @@ var Module = fx.Module(
 		NewBunRoomRepository,
 		NewMemoryRoomRuntimeRepository,
 		NewRedisMediaSessionStateRepository,
+		NewRedisMediaServerStateRepository,
 		NewConversationEventPublisher,
 	),
 )

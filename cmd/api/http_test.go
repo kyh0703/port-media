@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/kyh0703/portfoilo-media/configs"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
-	"github.com/kyh0703/portfoilo-media/internal/core/handler"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/httpx"
 	"go.uber.org/zap"
 )

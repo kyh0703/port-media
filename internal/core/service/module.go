@@ -14,8 +14,6 @@ var Module = fx.Module(
 			fx.As(new(sessionservice.Service)),
 			fx.As(new(usecase.SessionUsecase)),
 		),
-		sessionservice.NewMediaServerHeartbeat,
 	),
 	fx.Invoke(sessionservice.RegisterIdleCleanup),
-	fx.Invoke(sessionservice.RegisterMediaServerHeartbeat),
 )
