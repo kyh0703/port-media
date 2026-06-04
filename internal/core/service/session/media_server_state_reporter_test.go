@@ -1,4 +1,4 @@
-package lifecycle
+package session
 
 import (
 	"context"
@@ -31,7 +31,7 @@ func TestMediaServerStateReporterReportsRuntimeState(t *testing.T) {
 			Participants: 5,
 			Tracks:       3,
 		},
-	}, cfg, nil)
+	}, cfg)
 	reporter.now = func() time.Time {
 		return time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
 	}
@@ -64,7 +64,7 @@ func TestMediaServerStateReporterReportsOfflineState(t *testing.T) {
 		MediaServer: configs.MediaServerConfig{
 			URL: "http://media-a.internal:8080",
 		},
-	}, nil)
+	})
 
 	if err := reporter.ReportOffline(context.Background()); err != nil {
 		t.Fatalf("ReportOffline() error = %v", err)
