@@ -5,8 +5,8 @@ import (
 
 	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
-	"github.com/kyh0703/portfoilo-media/internal/pkg/httpx"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -18,7 +18,8 @@ type HTTPParams struct {
 
 	Config        *configs.Config
 	Logger        *zap.Logger
-	RequestLogger *httpx.RequestLogger
+	RequestLogger *middleware.RequestLogger
+	Recover       *middleware.RecoverMiddleware
 	Handlers      []handler.Handler `group:"handlers"`
 }
 
@@ -27,15 +28,18 @@ func NewHTTPHandler(params HTTPParams) http.Handler {
 	handleError := exception.NewHTTPErrorHandler(params.Logger)
 	for _, h := range params.Handlers {
 		for _, route := range h.Table() {
-			mux.Handle(routePattern(apiV1Prefix, route), httpx.WithErrorHandler(route.Handler, handleError))
+			mux.Handle(routePattern(apiV1Prefix, route), middleware.WithErrorHandler(route.Handler, handleError))
 		}
 	}
 
 	var app http.Handler = mux
+	if params.Recover != nil {
+		app = params.Recover.Handler(app)
+	}
 	if params.RequestLogger != nil {
 		app = params.RequestLogger.Handler(app)
 	}
-	app = httpx.CORS(params.Config.Server.CORS)(app)
+	app = middleware.CORS(params.Config.Server.CORS)(app)
 
 	return app
 }

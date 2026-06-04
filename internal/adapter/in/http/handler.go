@@ -1,18 +1,18 @@
 package handler
 
 import (
-	"github.com/kyh0703/portfoilo-media/internal/pkg/httpx"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
 	"go.uber.org/fx"
 )
 
 //go:generate go tool counterfeiter -generate
 
-type ErrorHandlerFunc = httpx.ErrorHandlerFunc
+type ErrorHandlerFunc = middleware.ErrorHandlerFunc
 
 type Mapper struct {
 	Method  string
 	Path    string
-	Handler httpx.ErrorHandlerFunc
+	Handler middleware.ErrorHandlerFunc
 }
 
 //counterfeiter:generate . Handler

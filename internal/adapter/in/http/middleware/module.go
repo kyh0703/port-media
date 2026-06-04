@@ -1,8 +1,9 @@
-package httpx
+package middleware
 
 import "go.uber.org/fx"
 
 var Module = fx.Module(
-	"httpx",
+	"http-middleware",
 	fx.Provide(NewRequestLogger),
+	fx.Provide(NewRecoverMiddleware),
 )

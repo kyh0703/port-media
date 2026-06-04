@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
-	"github.com/kyh0703/portfoilo-media/internal/pkg/httpx"
 	"go.uber.org/zap"
 )
 
@@ -433,7 +433,7 @@ func newTestApp() *testApp {
 }
 
 func (a *testApp) Add(method string, path string, h ErrorHandlerFunc) {
-	a.mux.Handle(method+" "+path, httpx.WithErrorHandler(h, exception.NewHTTPErrorHandler(zap.NewNop())))
+	a.mux.Handle(method+" "+path, middleware.WithErrorHandler(h, exception.NewHTTPErrorHandler(zap.NewNop())))
 }
 
 func (a *testApp) Test(req *http.Request, _ ...int) (*http.Response, error) {

@@ -1,4 +1,4 @@
-package httpx
+package middleware
 
 import (
 	"net/http"
@@ -11,6 +11,9 @@ type RequestLogger struct {
 }
 
 func NewRequestLogger(log *zap.Logger) *RequestLogger {
+	if log == nil {
+		log = zap.NewNop()
+	}
 	return &RequestLogger{log: log}
 }
 

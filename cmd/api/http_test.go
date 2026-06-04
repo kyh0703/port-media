@@ -9,12 +9,14 @@ import (
 
 	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
-	"github.com/kyh0703/portfoilo-media/internal/pkg/httpx"
 	"go.uber.org/zap"
 )
 
 type testHandler struct{}
+
+type panicHandler struct{}
 
 type appFakeSessionUsecase struct {
 	stats sessiondto.RuntimeStatsResponse
@@ -78,6 +80,20 @@ func (testHandler) Table() []handler.Mapper {
 	}
 }
 
+func (panicHandler) Table() []handler.Mapper {
+	return []handler.Mapper{
+		{
+			Method: http.MethodGet,
+			Path:   "/panic",
+			Handler: func(w http.ResponseWriter, r *http.Request) error {
+				_ = w
+				_ = r
+				panic("boom")
+			},
+		},
+	}
+}
+
 func TestNewHTTPHandlerHandlesCORSPreflightForJoin(t *testing.T) {
 	app := NewHTTPHandler(HTTPParams{
 		Config: &configs.Config{
@@ -92,7 +108,7 @@ func TestNewHTTPHandlerHandlesCORSPreflightForJoin(t *testing.T) {
 			},
 		},
 		Logger:        zap.NewNop(),
-		RequestLogger: httpx.NewRequestLogger(zap.NewNop()),
+		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
 		Handlers:      []handler.Handler{testHandler{}},
 	})
 
@@ -134,7 +150,7 @@ func TestNewHTTPHandlerExposesJoinResponseHeaders(t *testing.T) {
 			},
 		},
 		Logger:        zap.NewNop(),
-		RequestLogger: httpx.NewRequestLogger(zap.NewNop()),
+		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
 		Handlers:      []handler.Handler{testHandler{}},
 	})
 
@@ -162,6 +178,31 @@ func TestNewHTTPHandlerExposesJoinResponseHeaders(t *testing.T) {
 	}
 }
 
+func TestNewHTTPHandlerRecoversPanics(t *testing.T) {
+	app := NewHTTPHandler(HTTPParams{
+		Config: &configs.Config{
+			App:    configs.AppConfig{Name: "test"},
+			Server: configs.ServerConfig{},
+		},
+		Logger:        zap.NewNop(),
+		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
+		Recover:       middleware.NewRecoverMiddleware(zap.NewNop()),
+		Handlers:      []handler.Handler{panicHandler{}},
+	})
+
+	res := serve(app, httptest.NewRequest(http.MethodGet, "/api/v1/panic", nil))
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	if res.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusInternalServerError)
+	}
+	if got := res.Header.Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+}
+
 func TestNewHTTPHandlerDoesNotExposeMetricsEndpoint(t *testing.T) {
 	app := NewHTTPHandler(HTTPParams{
 		Config: &configs.Config{
@@ -169,7 +210,7 @@ func TestNewHTTPHandlerDoesNotExposeMetricsEndpoint(t *testing.T) {
 			Server: configs.ServerConfig{},
 		},
 		Logger:        zap.NewNop(),
-		RequestLogger: httpx.NewRequestLogger(zap.NewNop()),
+		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
 		Handlers:      []handler.Handler{testHandler{}},
 	})
 
