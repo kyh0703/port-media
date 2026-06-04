@@ -16,9 +16,9 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository/repositoryfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	"github.com/kyh0703/portfoilo-media/internal/core/port"
 	sessionservice "github.com/kyh0703/portfoilo-media/internal/core/service/session"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
-	"github.com/kyh0703/portfoilo-media/internal/pkg/openai"
 	rtc "github.com/kyh0703/portfoilo-media/internal/pkg/webrtc"
 	pionwebrtc "github.com/pion/webrtc/v4"
 )
@@ -38,7 +38,7 @@ func TestJoinEndpointSmokeWithPionClient(t *testing.T) {
 	runtime := corerepo.NewMemoryRoomRuntimeRepository()
 	states := newSmokeMediaSessionStateRepository()
 	provider := newSmokeRealtimeProvider(t)
-	svc := sessionservice.NewService(rooms, runtime, states, media, provider)
+	svc := sessionservice.NewService(rooms, runtime, states, rtc.NewGateway(media), provider)
 	if _, err := svc.CreateSession(context.Background(), sessiondto.CreateSessionRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
@@ -150,43 +150,43 @@ func newSmokeRealtimeProvider(t *testing.T) *smokeRealtimeProvider {
 	return &smokeRealtimeProvider{t: t, peers: make(map[string]*pionwebrtc.PeerConnection)}
 }
 
-func (p *smokeRealtimeProvider) CreateCall(ctx context.Context, input openai.CreateCallInput) (openai.CreateCallResult, error) {
+func (p *smokeRealtimeProvider) CreateCall(ctx context.Context, input port.CreateCallInput) (port.CreateCallResult, error) {
 	_ = ctx
 	peer, err := pionwebrtc.NewPeerConnection(pionwebrtc.Configuration{})
 	if err != nil {
-		return openai.CreateCallResult{}, err
+		return port.CreateCallResult{}, err
 	}
 	if err := peer.SetRemoteDescription(pionwebrtc.SessionDescription{
 		Type: pionwebrtc.SDPTypeOffer,
 		SDP:  input.SDPOffer,
 	}); err != nil {
 		_ = peer.Close()
-		return openai.CreateCallResult{}, err
+		return port.CreateCallResult{}, err
 	}
 	answer, err := peer.CreateAnswer(nil)
 	if err != nil {
 		_ = peer.Close()
-		return openai.CreateCallResult{}, err
+		return port.CreateCallResult{}, err
 	}
 	gatherComplete := pionwebrtc.GatheringCompletePromise(peer)
 	if err := peer.SetLocalDescription(answer); err != nil {
 		_ = peer.Close()
-		return openai.CreateCallResult{}, err
+		return port.CreateCallResult{}, err
 	}
 	select {
 	case <-gatherComplete:
 	case <-time.After(500 * time.Millisecond):
 		_ = peer.Close()
-		return openai.CreateCallResult{}, context.DeadlineExceeded
+		return port.CreateCallResult{}, context.DeadlineExceeded
 	}
 	p.peers["rtc_smoke"] = peer
 
 	localDescription := peer.LocalDescription()
 	if localDescription == nil {
 		_ = peer.Close()
-		return openai.CreateCallResult{}, context.Canceled
+		return port.CreateCallResult{}, context.Canceled
 	}
-	return openai.CreateCallResult{
+	return port.CreateCallResult{
 		SDPAnswer:      localDescription.SDP,
 		ProviderCallID: "rtc_smoke",
 	}, nil

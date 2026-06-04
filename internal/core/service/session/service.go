@@ -15,9 +15,8 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	"github.com/kyh0703/portfoilo-media/internal/core/port"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
-	"github.com/kyh0703/portfoilo-media/internal/pkg/openai"
-	rtc "github.com/kyh0703/portfoilo-media/internal/pkg/webrtc"
 	"go.uber.org/zap"
 )
 
@@ -40,8 +39,8 @@ type service struct {
 	rooms    repository.RoomRepository
 	runtime  repository.RoomRuntimeRepository
 	states   repository.MediaSessionStateRepository
-	media    rtc.PeerConnectionFactory
-	provider openai.RealtimeCallManager
+	media    port.MediaGateway
+	provider port.RealtimeProvider
 	events   repository.ConversationEventPublisher
 	log      *zap.Logger
 	now      func() time.Time
@@ -59,8 +58,8 @@ func NewService(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
 	states repository.MediaSessionStateRepository,
-	media rtc.PeerConnectionFactory,
-	provider openai.RealtimeCallManager,
+	media port.MediaGateway,
+	provider port.RealtimeProvider,
 ) Service {
 	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.NewNop())
 }
@@ -69,8 +68,8 @@ func NewServiceWithConfig(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
 	states repository.MediaSessionStateRepository,
-	media rtc.PeerConnectionFactory,
-	provider openai.RealtimeCallManager,
+	media port.MediaGateway,
+	provider port.RealtimeProvider,
 	cfg *configs.Config,
 ) Service {
 	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromConfig(cfg), zap.NewNop())
@@ -80,8 +79,8 @@ func NewServiceWithConfigAndLogger(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
 	states repository.MediaSessionStateRepository,
-	media rtc.PeerConnectionFactory,
-	provider openai.RealtimeCallManager,
+	media port.MediaGateway,
+	provider port.RealtimeProvider,
 	cfg *configs.Config,
 	log *zap.Logger,
 ) Service {
@@ -92,8 +91,8 @@ func NewServiceWithConfigLoggerAndPublisher(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
 	states repository.MediaSessionStateRepository,
-	media rtc.PeerConnectionFactory,
-	provider openai.RealtimeCallManager,
+	media port.MediaGateway,
+	provider port.RealtimeProvider,
 	events repository.ConversationEventPublisher,
 	cfg *configs.Config,
 	log *zap.Logger,
@@ -105,8 +104,8 @@ func newService(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
 	states repository.MediaSessionStateRepository,
-	media rtc.PeerConnectionFactory,
-	provider openai.RealtimeCallManager,
+	media port.MediaGateway,
+	provider port.RealtimeProvider,
 	events repository.ConversationEventPublisher,
 	realtime realtimeControlConfig,
 	log *zap.Logger,
@@ -259,9 +258,9 @@ func (s *service) acceptClientParticipant(
 	sdp string,
 	publishAudio bool,
 	now time.Time,
-) (entity.Participant, *rtc.Peer, error) {
+) (entity.Participant, *port.Peer, error) {
 	participantID := vo.NewParticipantID()
-	peer, err := s.media.AcceptOffer(ctx, rtc.OfferInput{
+	peer, err := s.media.AcceptOffer(ctx, port.OfferInput{
 		SessionID:               sessionID,
 		ParticipantID:           participantID,
 		Role:                    vo.ParticipantRoleClient,
@@ -329,7 +328,7 @@ func (s *service) lockSession(sessionID vo.SessionID) func() {
 
 func (s *service) connectOpenAIParticipant(ctx context.Context, sessionID vo.SessionID, now time.Time) (entity.Participant, error) {
 	participantID := vo.NewParticipantID()
-	offer, err := s.media.CreateOffer(ctx, rtc.CreateOfferInput{
+	offer, err := s.media.CreateOffer(ctx, port.CreateOfferInput{
 		SessionID:               sessionID,
 		ParticipantID:           participantID,
 		Role:                    vo.ParticipantRoleOpenAIAgent,
@@ -343,7 +342,7 @@ func (s *service) connectOpenAIParticipant(ctx context.Context, sessionID vo.Ses
 		return entity.Participant{}, err
 	}
 
-	call, err := s.provider.CreateCall(ctx, openai.CreateCallInput{
+	call, err := s.provider.CreateCall(ctx, port.CreateCallInput{
 		SDPOffer: offer.SDPOffer,
 	})
 	if err != nil {
@@ -362,7 +361,7 @@ func (s *service) connectOpenAIParticipant(ctx context.Context, sessionID vo.Ses
 	return participant, nil
 }
 
-func (s *service) handleOpenAIDataChannelMessage(message rtc.DataChannelMessage) {
+func (s *service) handleOpenAIDataChannelMessage(message port.DataChannelMessage) {
 	ctx := context.Background()
 	now := s.now().UTC()
 	unlock := s.lockSession(message.SessionID)
@@ -629,7 +628,7 @@ func (s *service) GetHealth(ctx context.Context) error {
 	return nil
 }
 
-func (s *service) handleConnectionStateChange(change rtc.ConnectionStateChange) {
+func (s *service) handleConnectionStateChange(change port.ConnectionStateChange) {
 	ctx := context.Background()
 	now := s.now().UTC()
 	unlock := s.lockSession(change.SessionID)
@@ -665,7 +664,7 @@ func (s *service) handleConnectionStateChange(change rtc.ConnectionStateChange) 
 	_ = s.states.Save(ctx, s.mediaSessionState(room, room.UserID, now))
 }
 
-func (s *service) handleMediaTrackStateChange(change rtc.MediaTrackStateChange) {
+func (s *service) handleMediaTrackStateChange(change port.MediaTrackStateChange) {
 	ctx := context.Background()
 	now := s.now().UTC()
 	unlock := s.lockSession(change.SessionID)
