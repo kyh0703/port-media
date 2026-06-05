@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository/repositoryfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
@@ -727,14 +726,12 @@ func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 		}
 		return entity.MediaSessionState{}, false, nil
 	})
-	svc := NewServiceWithConfig(rooms, runtime, states, media, provider, &configs.Config{
-		OpenAI: configs.OpenAIConfig{
-			RealtimeDataChannelLabel: "custom-events",
-			RealtimeInitialEvents: []string{
-				`{"type":"session.update"}`,
-				" ",
-				`{"type":"response.create"}`,
-			},
+	svc := NewServiceWithOptions(rooms, runtime, states, media, provider, ServiceOptions{
+		RealtimeDataChannelLabel: "custom-events",
+		RealtimeInitialEvents: []string{
+			`{"type":"session.update"}`,
+			" ",
+			`{"type":"response.create"}`,
 		},
 	})
 	createSessionForTest(t, svc)
@@ -864,14 +861,14 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 		return entity.MediaSessionState{}, false, nil
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
-	svc := NewServiceWithConfigLoggerAndPublisher(
+	svc := NewServiceWithOptionsLoggerAndPublisher(
 		rooms,
 		runtime,
 		states,
 		media,
 		provider,
 		publisher,
-		&configs.Config{},
+		ServiceOptions{},
 		zap.NewNop(),
 	)
 	createSessionForTest(t, svc)
@@ -967,14 +964,14 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 		return entity.MediaSessionState{}, false, nil
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
-	svc := NewServiceWithConfigLoggerAndPublisher(
+	svc := NewServiceWithOptionsLoggerAndPublisher(
 		rooms,
 		runtime,
 		states,
 		media,
 		provider,
 		publisher,
-		&configs.Config{},
+		ServiceOptions{},
 		zap.NewNop(),
 	)
 	createSessionForTest(t, svc)
@@ -1031,14 +1028,14 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 		return entity.MediaSessionState{}, false, nil
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
-	svc := NewServiceWithConfigLoggerAndPublisher(
+	svc := NewServiceWithOptionsLoggerAndPublisher(
 		rooms,
 		runtime,
 		states,
 		media,
 		provider,
 		publisher,
-		&configs.Config{},
+		ServiceOptions{},
 		zap.NewNop(),
 	)
 	createSessionForTest(t, svc)
@@ -1100,14 +1097,14 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	publisher.PublishReturns(errors.New("publish failed"))
 	observed, logs := observer.New(zap.WarnLevel)
-	svc := NewServiceWithConfigLoggerAndPublisher(
+	svc := NewServiceWithOptionsLoggerAndPublisher(
 		rooms,
 		runtime,
 		states,
 		media,
 		provider,
 		publisher,
-		&configs.Config{},
+		ServiceOptions{},
 		zap.New(observed),
 	)
 	createSessionForTest(t, svc)
@@ -1166,9 +1163,7 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 		}
 		return entity.MediaSessionState{}, false, nil
 	})
-	svc := NewServiceWithConfig(rooms, runtime, states, media, provider, &configs.Config{
-		Realtime: configs.RealtimeConfig{RealtimeEventHistoryLimit: 2},
-	})
+	svc := NewServiceWithOptions(rooms, runtime, states, media, provider, ServiceOptions{RealtimeEventHistoryLimit: 2})
 	createSessionForTest(t, svc)
 
 	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{

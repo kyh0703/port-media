@@ -5,24 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 )
 
 func TestMediaServerStateReporterReportsRuntimeState(t *testing.T) {
-	cfg := &configs.Config{
-		NodeID: "media-a",
-		Server: configs.ServerConfig{
-			Host: "0.0.0.0",
-			Port: 8080,
-		},
-		MediaServer: configs.MediaServerConfig{
-			URL:         "http://media-a.internal:8080",
-			Status:      "healthy",
-			MaxSessions: 10,
-		},
-	}
 	states := &fakeMediaServerStateRepository{}
 	reporter := NewMediaServerStateReporter(states, fakeStateReporterService{
 		stats: sessiondto.RuntimeStatsResponse{
@@ -31,7 +18,12 @@ func TestMediaServerStateReporterReportsRuntimeState(t *testing.T) {
 			Participants: 5,
 			Tracks:       3,
 		},
-	}, cfg)
+	}, MediaServerStateReporterOptions{
+		ID:          "media-a",
+		URL:         "http://media-a.internal:8080",
+		Status:      entity.MediaServerStatusHealthy,
+		MaxSessions: 10,
+	})
 	reporter.now = func() time.Time {
 		return time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
 	}
@@ -59,11 +51,9 @@ func TestMediaServerStateReporterReportsRuntimeState(t *testing.T) {
 
 func TestMediaServerStateReporterReportsOfflineState(t *testing.T) {
 	states := &fakeMediaServerStateRepository{}
-	reporter := NewMediaServerStateReporter(states, fakeStateReporterService{}, &configs.Config{
-		NodeID: "media-a",
-		MediaServer: configs.MediaServerConfig{
-			URL: "http://media-a.internal:8080",
-		},
+	reporter := NewMediaServerStateReporter(states, fakeStateReporterService{}, MediaServerStateReporterOptions{
+		ID:  "media-a",
+		URL: "http://media-a.internal:8080",
 	})
 
 	if err := reporter.ReportOffline(context.Background()); err != nil {
@@ -75,32 +65,6 @@ func TestMediaServerStateReporterReportsOfflineState(t *testing.T) {
 	}
 	if states.saved.Status != entity.MediaServerStatusOffline {
 		t.Fatalf("state.Status = %q, want offline", states.saved.Status)
-	}
-}
-
-func TestMediaServerStateReporterDefaultsURLFromServerConfig(t *testing.T) {
-	cfg := &configs.Config{
-		Server: configs.ServerConfig{
-			Host: "0.0.0.0",
-			Port: 9090,
-		},
-	}
-
-	if got := mediaServerURL(cfg); got != "http://localhost:9090" {
-		t.Fatalf("mediaServerURL() = %q, want http://localhost:9090", got)
-	}
-}
-
-func TestMediaServerStateReporterUsesConfigNodeID(t *testing.T) {
-	cfg := &configs.Config{
-		NodeID: "node-a",
-		Server: configs.ServerConfig{
-			Port: 8080,
-		},
-	}
-
-	if got := mediaServerID(cfg); got != "node-a" {
-		t.Fatalf("mediaServerID() = %q, want node-a", got)
 	}
 }
 

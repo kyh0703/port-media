@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
@@ -54,6 +53,12 @@ type realtimeControlConfig struct {
 	realtimeEventHistoryLimit int
 }
 
+type ServiceOptions struct {
+	RealtimeDataChannelLabel  string
+	RealtimeInitialEvents     []string
+	RealtimeEventHistoryLimit int
+}
+
 func NewService(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
@@ -64,40 +69,40 @@ func NewService(
 	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.NewNop())
 }
 
-func NewServiceWithConfig(
+func NewServiceWithOptions(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
 	states repository.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
-	cfg *configs.Config,
+	options ServiceOptions,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromConfig(cfg), zap.NewNop())
+	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromOptions(options), zap.NewNop())
 }
 
-func NewServiceWithConfigAndLogger(
+func NewServiceWithOptionsAndLogger(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
 	states repository.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
-	cfg *configs.Config,
+	options ServiceOptions,
 	log *zap.Logger,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromConfig(cfg), log)
+	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromOptions(options), log)
 }
 
-func NewServiceWithConfigLoggerAndPublisher(
+func NewServiceWithOptionsLoggerAndPublisher(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
 	states repository.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
 	events repository.ConversationEventPublisher,
-	cfg *configs.Config,
+	options ServiceOptions,
 	log *zap.Logger,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, events, realtimeControlConfigFromConfig(cfg), log)
+	return newService(rooms, runtime, states, media, provider, events, realtimeControlConfigFromOptions(options), log)
 }
 
 func newService(
@@ -134,17 +139,14 @@ func newService(
 	}
 }
 
-func realtimeControlConfigFromConfig(cfg *configs.Config) realtimeControlConfig {
+func realtimeControlConfigFromOptions(options ServiceOptions) realtimeControlConfig {
 	realtime := defaultRealtimeControlConfig()
-	if cfg == nil {
-		return realtime
-	}
-	if label := strings.TrimSpace(cfg.OpenAI.RealtimeDataChannelLabel); label != "" {
+	if label := strings.TrimSpace(options.RealtimeDataChannelLabel); label != "" {
 		realtime.dataChannelLabel = label
 	}
-	realtime.initialEvents = compactRealtimeInitialEvents(cfg.OpenAI.RealtimeInitialEvents)
-	if cfg.Realtime.RealtimeEventHistoryLimit > 0 {
-		realtime.realtimeEventHistoryLimit = cfg.Realtime.RealtimeEventHistoryLimit
+	realtime.initialEvents = compactRealtimeInitialEvents(options.RealtimeInitialEvents)
+	if options.RealtimeEventHistoryLimit > 0 {
+		realtime.realtimeEventHistoryLimit = options.RealtimeEventHistoryLimit
 	}
 	return realtime
 }
