@@ -31,8 +31,8 @@ func createSessionForTest(t *testing.T, svc Service) {
 }
 
 func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -50,17 +50,17 @@ func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	res, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	res, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	if res.SDPAnswer != "answer-sdp" {
@@ -79,8 +79,8 @@ func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 }
 
 func TestServiceRejectsOfferWhenSessionWasNotCreated(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -98,16 +98,45 @@ func TestServiceRejectsOfferWhenSessionWasNotCreated(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if !errors.Is(err, usecase.ErrSessionNotFound) {
-		t.Fatalf("AcceptOffer() error = %v, want %v", err, usecase.ErrSessionNotFound)
+		t.Fatalf("JoinSession() error = %v, want %v", err, usecase.ErrSessionNotFound)
+	}
+	if media.AcceptOfferCallCount() != 0 {
+		t.Fatalf("media AcceptOffer calls = %d, want 0", media.AcceptOfferCallCount())
+	}
+}
+
+func TestServiceRejectsJoinWhenRoomIsClosedBeforeAcceptingMediaOffer(t *testing.T) {
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
+	media := &fakeMediaGateway{}
+	provider := &fakeRealtimeProvider{}
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	svc := NewService(records, runtime, states, media, provider)
+
+	now := time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
+	room := entity.NewRoom(vo.RoomID("room-1"), vo.SessionID("session-1"), vo.ConversationID("conversation-1"), now)
+	room.Close(now)
+	if err := records.Save(context.Background(), entity.NewMediaSessionRecordFromRoom(room)); err != nil {
+		t.Fatalf("records Save() error = %v", err)
+	}
+
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if !errors.Is(err, usecase.ErrSessionNotJoinable) {
+		t.Fatalf("JoinSession() error = %v, want %v", err, usecase.ErrSessionNotJoinable)
 	}
 	if media.AcceptOfferCallCount() != 0 {
 		t.Fatalf("media AcceptOffer calls = %d, want 0", media.AcceptOfferCallCount())
@@ -115,8 +144,8 @@ func TestServiceRejectsOfferWhenSessionWasNotCreated(t *testing.T) {
 }
 
 func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -134,17 +163,17 @@ func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	res, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	res, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	room, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1"))
@@ -182,8 +211,8 @@ func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 }
 
 func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -201,27 +230,27 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() first error = %v", err)
+		t.Fatalf("JoinSession() first error = %v", err)
 	}
 
-	_, err = svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err = svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() second publisher error = %v", err)
+		t.Fatalf("JoinSession() second publisher error = %v", err)
 	}
 	if media.AcceptOfferCallCount() != 2 {
 		t.Fatalf("media AcceptOffer calls = %d, want 2", media.AcceptOfferCallCount())
@@ -249,8 +278,8 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 }
 
 func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -268,20 +297,20 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "publisher-offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() publisher error = %v", err)
+		t.Fatalf("JoinSession() publisher error = %v", err)
 	}
 
-	_, err = svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err = svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -289,7 +318,7 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 		AudioMode:      sessiondto.AudioModeListener,
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() listener error = %v", err)
+		t.Fatalf("JoinSession() listener error = %v", err)
 	}
 
 	if media.AcceptOfferCallCount() != 2 {
@@ -337,8 +366,8 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 }
 
 func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -356,17 +385,17 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	res, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	res, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	leave, err := svc.LeaveParticipant(context.Background(), sessiondto.LeaveParticipantRequest{
@@ -422,8 +451,8 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 }
 
 func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -441,17 +470,17 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -496,8 +525,8 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 }
 
 func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -516,17 +545,17 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	core, observed := observer.New(zap.InfoLevel)
-	svc := newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.New(core))
+	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.New(core))
 	createSessionForTest(t, svc)
 
-	res, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	res, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	joinedEntries := observed.FilterMessage("media_participant_joined").All()
@@ -587,8 +616,8 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 }
 
 func TestServicePersistsRoomMetadataForClientJoin(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -606,34 +635,34 @@ func TestServicePersistsRoomMetadataForClientJoin(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
-	room, found, err := rooms.FindBySessionID(context.Background(), vo.SessionID("session-1"))
+	record, found, err := records.FindBySessionID(context.Background(), vo.SessionID("session-1"))
 	if err != nil {
 		t.Fatalf("FindBySessionID() error = %v", err)
 	}
 	if !found {
-		t.Fatal("metadata room not found")
+		t.Fatal("metadata record not found")
 	}
-	if room.ConversationID != vo.ConversationID("conversation-1") {
-		t.Fatalf("ConversationID = %q, want conversation-1", room.ConversationID)
+	if record.ConversationID != vo.ConversationID("conversation-1") {
+		t.Fatalf("ConversationID = %q, want conversation-1", record.ConversationID)
 	}
 }
 
 func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -651,17 +680,17 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -709,8 +738,8 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 }
 
 func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -728,7 +757,7 @@ func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewServiceWithOptions(rooms, runtime, states, media, provider, ServiceOptions{
+	svc := NewServiceWithOptions(records, runtime, states, media, provider, ServiceOptions{
 		RealtimeDataChannelLabel: "custom-events",
 		RealtimeInitialEvents: []string{
 			`{"type":"session.update"}`,
@@ -738,14 +767,14 @@ func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 	})
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -761,8 +790,8 @@ func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 }
 
 func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -780,17 +809,17 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -843,8 +872,8 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 }
 
 func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -864,7 +893,7 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithOptionsLoggerAndPublisher(
-		rooms,
+		records,
 		runtime,
 		states,
 		media,
@@ -875,14 +904,14 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -946,8 +975,8 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 }
 
 func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -967,7 +996,7 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithOptionsLoggerAndPublisher(
-		rooms,
+		records,
 		runtime,
 		states,
 		media,
@@ -978,14 +1007,14 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -1010,8 +1039,8 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 }
 
 func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1031,7 +1060,7 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithOptionsLoggerAndPublisher(
-		rooms,
+		records,
 		runtime,
 		states,
 		media,
@@ -1042,14 +1071,14 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -1077,8 +1106,8 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 }
 
 func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1100,7 +1129,7 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 	publisher.PublishReturns(errors.New("publish failed"))
 	observed, logs := observer.New(zap.WarnLevel)
 	svc := NewServiceWithOptionsLoggerAndPublisher(
-		rooms,
+		records,
 		runtime,
 		states,
 		media,
@@ -1111,14 +1140,14 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -1146,8 +1175,8 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 }
 
 func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1165,17 +1194,17 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewServiceWithOptions(rooms, runtime, states, media, provider, ServiceOptions{RealtimeEventHistoryLimit: 2})
+	svc := NewServiceWithOptions(records, runtime, states, media, provider, ServiceOptions{RealtimeEventHistoryLimit: 2})
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -1211,8 +1240,8 @@ func TestRealtimeEventTypeFallsBackToUnknown(t *testing.T) {
 }
 
 func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1230,17 +1259,17 @@ func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	if states.SaveCallCount() != 1 {
@@ -1292,8 +1321,8 @@ func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
 }
 
 func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1311,17 +1340,17 @@ func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err == nil {
-		t.Fatal("AcceptOffer() error = nil, want error")
+		t.Fatal("JoinSession() error = nil, want error")
 	}
 
 	_, closedSession := media.CloseSessionArgsForCall(0)
@@ -1348,21 +1377,21 @@ func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 		t.Fatalf("MediaState = %q, want %q", state.MediaState, vo.TrackStateFailed)
 	}
 
-	room, found, err := rooms.FindBySessionID(context.Background(), vo.SessionID("session-1"))
+	record, found, err := records.FindBySessionID(context.Background(), vo.SessionID("session-1"))
 	if err != nil {
 		t.Fatalf("FindBySessionID() error = %v", err)
 	}
 	if !found {
-		t.Fatal("metadata room not found")
+		t.Fatal("metadata record not found")
 	}
-	if room.Status != vo.RoomStatusFailed {
-		t.Fatalf("metadata status = %q, want %q", room.Status, vo.RoomStatusFailed)
+	if record.Status != vo.RoomStatusFailed {
+		t.Fatalf("record status = %q, want %q", record.Status, vo.RoomStatusFailed)
 	}
 }
 
 func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1380,17 +1409,17 @@ func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err == nil {
-		t.Fatal("AcceptOffer() error = nil, want error")
+		t.Fatal("JoinSession() error = nil, want error")
 	}
 
 	_, hangupProviderCallID := provider.HangupCallArgsForCall(0)
@@ -1411,8 +1440,8 @@ func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
 }
 
 func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1430,17 +1459,17 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
@@ -1476,8 +1505,8 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 }
 
 func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1495,17 +1524,17 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
@@ -1540,8 +1569,8 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 }
 
 func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1559,17 +1588,17 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
@@ -1607,8 +1636,8 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 }
 
 func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1626,17 +1655,17 @@ func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -1668,8 +1697,8 @@ func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 }
 
 func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1687,17 +1716,17 @@ func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
@@ -1727,8 +1756,8 @@ func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 }
 
 func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1746,17 +1775,17 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
@@ -1799,8 +1828,8 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 }
 
 func TestServiceEndsSessionCleanup(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1818,17 +1847,17 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	res, err := svc.EndSession(context.Background(), sessiondto.EndSessionRequest{
@@ -1855,21 +1884,21 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 		t.Fatalf("runtime found=%v err=%v, want not found", found, err)
 	}
 
-	room, found, err := rooms.FindBySessionID(context.Background(), vo.SessionID("session-1"))
+	record, found, err := records.FindBySessionID(context.Background(), vo.SessionID("session-1"))
 	if err != nil {
-		t.Fatalf("metadata FindBySessionID() error = %v", err)
+		t.Fatalf("record FindBySessionID() error = %v", err)
 	}
 	if !found {
-		t.Fatal("metadata room not found")
+		t.Fatal("metadata record not found")
 	}
-	if room.Status != vo.RoomStatusClosed {
-		t.Fatalf("metadata status = %q, want %q", room.Status, vo.RoomStatusClosed)
+	if record.Status != vo.RoomStatusClosed {
+		t.Fatalf("record status = %q, want %q", record.Status, vo.RoomStatusClosed)
 	}
 }
 
 func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1887,7 +1916,7 @@ func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	svcImpl := svc.(*service)
 
 	oldNow := time.Date(2026, 5, 19, 10, 0, 0, 0, time.UTC)
@@ -1899,19 +1928,23 @@ func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
 	client := entity.NewParticipant(vo.ParticipantID("client-1"), vo.ParticipantRoleClient, oldNow)
 	client.SetState(vo.ConnectionStateConnected, oldNow)
 	client.AddTrack(entity.NewTrack(vo.TrackID("track-1"), vo.TrackKindAudio, oldNow), oldNow)
-	room.AddParticipant(client, oldNow)
+	if err := room.JoinClient(client, oldNow); err != nil {
+		t.Fatalf("JoinClient() error = %v", err)
+	}
 	agent := entity.NewParticipant(vo.ParticipantID("agent-1"), vo.ParticipantRoleOpenAIAgent, oldNow)
 	agent.SetState(vo.ConnectionStateConnected, oldNow)
 	agent.SetProviderCallID("rtc_123", oldNow)
 	agent.AddTrack(entity.NewTrack(vo.TrackID("track-2"), vo.TrackKindAudio, oldNow), oldNow)
-	room.AddParticipant(agent, oldNow)
+	if err := room.AttachOpenAIAgent(agent, oldNow); err != nil {
+		t.Fatalf("AttachOpenAIAgent() error = %v", err)
+	}
 	room.UpdatedAt = oldNow
 
 	if err := runtime.Save(context.Background(), room); err != nil {
 		t.Fatalf("runtime Save() error = %v", err)
 	}
-	if err := rooms.Save(context.Background(), room); err != nil {
-		t.Fatalf("rooms Save() error = %v", err)
+	if err := records.Save(context.Background(), entity.NewMediaSessionRecordFromRoom(room)); err != nil {
+		t.Fatalf("records Save() error = %v", err)
 	}
 
 	cleaned, err := svc.CleanupIdleRooms(context.Background(), time.Minute)
@@ -1934,15 +1967,15 @@ func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
 		t.Fatalf("runtime found=%v err=%v, want not found", found, err)
 	}
 
-	room, found, err := rooms.FindBySessionID(context.Background(), vo.SessionID("session-1"))
+	record, found, err := records.FindBySessionID(context.Background(), vo.SessionID("session-1"))
 	if err != nil {
-		t.Fatalf("metadata FindBySessionID() error = %v", err)
+		t.Fatalf("record FindBySessionID() error = %v", err)
 	}
 	if !found {
-		t.Fatal("metadata room not found")
+		t.Fatal("metadata record not found")
 	}
-	if room.Status != vo.RoomStatusClosed {
-		t.Fatalf("metadata status = %q, want %q", room.Status, vo.RoomStatusClosed)
+	if record.Status != vo.RoomStatusClosed {
+		t.Fatalf("record status = %q, want %q", record.Status, vo.RoomStatusClosed)
 	}
 	_, state := states.SaveArgsForCall(0)
 	if states.SaveCallCount() != 1 || state.Status != vo.RoomStatusClosed {
@@ -1951,8 +1984,8 @@ func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
 }
 
 func TestServiceKeepsRecentlyUpdatedRuntimeRooms(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -1970,7 +2003,7 @@ func TestServiceKeepsRecentlyUpdatedRuntimeRooms(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	svcImpl := svc.(*service)
 
 	now := time.Date(2026, 5, 19, 10, 0, 0, 0, time.UTC)
@@ -1995,8 +2028,8 @@ func TestServiceKeepsRecentlyUpdatedRuntimeRooms(t *testing.T) {
 }
 
 func TestServiceShutdownClosesActiveRuntimeRooms(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -2014,7 +2047,7 @@ func TestServiceShutdownClosesActiveRuntimeRooms(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	svcImpl := svc.(*service)
 
 	now := time.Date(2026, 5, 19, 10, 0, 0, 0, time.UTC)
@@ -2025,12 +2058,16 @@ func TestServiceShutdownClosesActiveRuntimeRooms(t *testing.T) {
 	client := entity.NewParticipant(vo.ParticipantID("client-1"), vo.ParticipantRoleClient, now)
 	client.SetState(vo.ConnectionStateConnected, now)
 	client.AddTrack(entity.NewTrack(vo.TrackID("track-1"), vo.TrackKindAudio, now), now)
-	room.AddParticipant(client, now)
+	if err := room.JoinClient(client, now); err != nil {
+		t.Fatalf("JoinClient() error = %v", err)
+	}
 	agent := entity.NewParticipant(vo.ParticipantID("agent-1"), vo.ParticipantRoleOpenAIAgent, now)
 	agent.SetState(vo.ConnectionStateConnected, now)
 	agent.SetProviderCallID("rtc_123", now)
 	agent.AddTrack(entity.NewTrack(vo.TrackID("track-2"), vo.TrackKindAudio, now), now)
-	room.AddParticipant(agent, now)
+	if err := room.AttachOpenAIAgent(agent, now); err != nil {
+		t.Fatalf("AttachOpenAIAgent() error = %v", err)
+	}
 
 	if err := runtime.Save(context.Background(), room); err != nil {
 		t.Fatalf("runtime Save() error = %v", err)
@@ -2062,8 +2099,8 @@ func TestServiceShutdownClosesActiveRuntimeRooms(t *testing.T) {
 }
 
 func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -2081,17 +2118,17 @@ func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	_, err = svc.EndSession(context.Background(), sessiondto.EndSessionRequest{
@@ -2125,8 +2162,8 @@ func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 }
 
 func TestServiceReturnsRuntimeStats(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -2144,17 +2181,17 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
 	acceptedInput.OnConnectionStateChange(port.ConnectionStateChange{
@@ -2238,8 +2275,8 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 }
 
 func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
-	rooms := newMemoryRoomRepositoryForTest()
-	runtime := newMemoryRoomRepositoryForTest()
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
 	media := &fakeMediaGateway{}
 	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
 	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
@@ -2257,17 +2294,17 @@ func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
 		}
 		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
-	svc := NewService(rooms, runtime, states, media, provider)
+	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.AcceptOffer(context.Background(), sessiondto.AcceptOfferRequest{
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "offer-sdp",
 	})
 	if err != nil {
-		t.Fatalf("AcceptOffer() error = %v", err)
+		t.Fatalf("JoinSession() error = %v", err)
 	}
 
 	status, found, err := svc.GetSessionStatus(context.Background(), sessiondto.GetSessionStatusRequest{

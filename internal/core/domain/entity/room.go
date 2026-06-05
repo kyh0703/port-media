@@ -1,9 +1,17 @@
 package entity
 
 import (
+	"errors"
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
+)
+
+var (
+	ErrRoomNotJoinable          = errors.New("room is not joinable")
+	ErrParticipantRoleMismatch  = errors.New("participant role mismatch")
+	ErrParticipantAlreadyJoined = errors.New("participant already joined")
+	ErrOpenAIAgentAlreadyJoined = errors.New("openai agent already joined")
 )
 
 type Room struct {
@@ -36,12 +44,40 @@ func (r *Room) SetUserID(userID string, now time.Time) {
 	r.UpdatedAt = now
 }
 
-func (r *Room) AddParticipant(participant Participant, now time.Time) {
+func (r Room) CanJoinParticipants() bool {
+	return r.Status == vo.RoomStatusCreated || r.Status == vo.RoomStatusActive
+}
+
+func (r *Room) JoinClient(participant Participant, now time.Time) error {
+	if participant.Role != vo.ParticipantRoleClient {
+		return ErrParticipantRoleMismatch
+	}
+	return r.addParticipant(participant, now)
+}
+
+func (r *Room) AttachOpenAIAgent(participant Participant, now time.Time) error {
+	if participant.Role != vo.ParticipantRoleOpenAIAgent {
+		return ErrParticipantRoleMismatch
+	}
+	if r.HasOpenAIAgent() {
+		return ErrOpenAIAgentAlreadyJoined
+	}
+	return r.addParticipant(participant, now)
+}
+
+func (r *Room) addParticipant(participant Participant, now time.Time) error {
+	if !r.CanJoinParticipants() {
+		return ErrRoomNotJoinable
+	}
+	if _, exists := r.Participants[participant.ID]; exists {
+		return ErrParticipantAlreadyJoined
+	}
 	r.Participants[participant.ID] = participant
 	r.UpdatedAt = now
 	if r.Status == vo.RoomStatusCreated {
 		r.Status = vo.RoomStatusActive
 	}
+	return nil
 }
 
 func (r Room) Participant(participantID vo.ParticipantID) (Participant, bool) {
@@ -69,7 +105,11 @@ func (r *Room) RecordRealtimeEvent(eventType string, now time.Time) {
 	r.UpdatedAt = now
 }
 
-func (r Room) HasParticipantRole(role vo.ParticipantRole) bool {
+func (r Room) HasOpenAIAgent() bool {
+	return r.hasParticipantRole(vo.ParticipantRoleOpenAIAgent)
+}
+
+func (r Room) hasParticipantRole(role vo.ParticipantRole) bool {
 	for _, participant := range r.Participants {
 		if participant.Role == role {
 			return true

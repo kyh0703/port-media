@@ -18,42 +18,42 @@ type testHandler struct{}
 
 type panicHandler struct{}
 
-type appFakeSessionUsecase struct {
+type appFakeSessionUsecases struct {
 	stats sessiondto.RuntimeStatsResponse
 	err   error
 }
 
-func (f appFakeSessionUsecase) CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error) {
+func (f appFakeSessionUsecases) CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error) {
 	_ = ctx
 	_ = req
 	return sessiondto.CreateSessionResponse{}, nil
 }
 
-func (f appFakeSessionUsecase) AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferRequest) (sessiondto.AcceptOfferResponse, error) {
+func (f appFakeSessionUsecases) JoinSession(ctx context.Context, req sessiondto.JoinSessionCommand) (sessiondto.JoinSessionResult, error) {
 	_ = ctx
 	_ = req
-	return sessiondto.AcceptOfferResponse{}, nil
+	return sessiondto.JoinSessionResult{}, nil
 }
 
-func (f appFakeSessionUsecase) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
+func (f appFakeSessionUsecases) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
 	_ = ctx
 	_ = req
 	return sessiondto.LeaveParticipantResponse{}, nil
 }
 
-func (f appFakeSessionUsecase) EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error) {
+func (f appFakeSessionUsecases) EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error) {
 	_ = ctx
 	_ = req
 	return sessiondto.EndSessionResponse{}, nil
 }
 
-func (f appFakeSessionUsecase) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error) {
+func (f appFakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error) {
 	_ = ctx
 	_ = req
 	return sessiondto.GetSessionStatusResponse{}, false, nil
 }
 
-func (f appFakeSessionUsecase) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
+func (f appFakeSessionUsecases) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
 	_ = ctx
 	if f.err != nil {
 		return sessiondto.RuntimeStatsResponse{}, f.err
@@ -61,7 +61,7 @@ func (f appFakeSessionUsecase) GetRuntimeStats(ctx context.Context) (sessiondto.
 	return f.stats, nil
 }
 
-func (f appFakeSessionUsecase) GetHealth(ctx context.Context) error {
+func (f appFakeSessionUsecases) GetHealth(ctx context.Context) error {
 	_ = ctx
 	return nil
 }

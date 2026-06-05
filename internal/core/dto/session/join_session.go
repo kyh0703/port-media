@@ -1,6 +1,6 @@
 package session
 
-type AcceptOfferRequest struct {
+type JoinSessionCommand struct {
 	SessionID      string
 	ConversationID string
 	UserID         string
@@ -8,12 +8,12 @@ type AcceptOfferRequest struct {
 	AudioMode      AudioMode
 }
 
-type AcceptOfferResponse struct {
+type JoinSessionResult struct {
 	SDPAnswer     string
 	RoomID        string
 	ParticipantID string
 }
 
-func (r AcceptOfferRequest) PublishesAudio() bool {
+func (r JoinSessionCommand) PublishesAudio() bool {
 	return r.AudioMode != AudioModeListener
 }

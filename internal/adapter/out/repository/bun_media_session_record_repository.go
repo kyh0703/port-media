@@ -12,16 +12,16 @@ import (
 	"github.com/uptrace/bun"
 )
 
-type BunRoomRepository struct {
+type BunMediaSessionRecordRepository struct {
 	db *bun.DB
 }
 
-func NewBunRoomRepository(db *bun.DB) domainrepo.RoomRepository {
-	return &BunRoomRepository{db: db}
+func NewBunMediaSessionRecordRepository(db *bun.DB) domainrepo.MediaSessionRecordRepository {
+	return &BunMediaSessionRecordRepository{db: db}
 }
 
-func (r *BunRoomRepository) Save(ctx context.Context, room entity.Room) error {
-	row := toRoomModel(room)
+func (r *BunMediaSessionRecordRepository) Save(ctx context.Context, record entity.MediaSessionRecord) error {
+	row := toMediaSessionRecordModel(record)
 	_, err := r.db.NewInsert().
 		Model(&row).
 		On("CONFLICT (id) DO UPDATE").
@@ -36,7 +36,7 @@ func (r *BunRoomRepository) Save(ctx context.Context, room entity.Room) error {
 	return err
 }
 
-func (r *BunRoomRepository) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.Room, bool, error) {
+func (r *BunMediaSessionRecordRepository) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionRecord, bool, error) {
 	var row model.Room
 	err := r.db.NewSelect().
 		Model(&row).
@@ -45,15 +45,15 @@ func (r *BunRoomRepository) FindBySessionID(ctx context.Context, sessionID vo.Se
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return entity.Room{}, false, nil
+			return entity.MediaSessionRecord{}, false, nil
 		}
-		return entity.Room{}, false, err
+		return entity.MediaSessionRecord{}, false, err
 	}
 
-	return toRoomEntity(row), true, nil
+	return toMediaSessionRecord(row), true, nil
 }
 
-func (r *BunRoomRepository) Delete(ctx context.Context, roomID vo.RoomID) error {
+func (r *BunMediaSessionRecordRepository) Delete(ctx context.Context, roomID vo.RoomID) error {
 	_, err := r.db.NewDelete().
 		Model((*model.Room)(nil)).
 		Where("id = ?", string(roomID)).
@@ -61,28 +61,27 @@ func (r *BunRoomRepository) Delete(ctx context.Context, roomID vo.RoomID) error 
 	return err
 }
 
-func toRoomModel(room entity.Room) model.Room {
+func toMediaSessionRecordModel(record entity.MediaSessionRecord) model.Room {
 	return model.Room{
-		ID:                    string(room.ID),
-		SessionID:             string(room.SessionID),
-		ConversationID:        string(room.ConversationID),
-		UserID:                room.UserID,
-		Status:                string(room.Status),
-		LastRealtimeEventType: room.LastRealtimeEventType,
-		LastRealtimeEventAt:   room.LastRealtimeEventAt,
-		CreatedAt:             room.CreatedAt,
-		UpdatedAt:             room.UpdatedAt,
+		ID:                    string(record.ID),
+		SessionID:             string(record.SessionID),
+		ConversationID:        string(record.ConversationID),
+		UserID:                record.UserID,
+		Status:                string(record.Status),
+		LastRealtimeEventType: record.LastRealtimeEventType,
+		LastRealtimeEventAt:   record.LastRealtimeEventAt,
+		CreatedAt:             record.CreatedAt,
+		UpdatedAt:             record.UpdatedAt,
 	}
 }
 
-func toRoomEntity(row model.Room) entity.Room {
-	return entity.Room{
+func toMediaSessionRecord(row model.Room) entity.MediaSessionRecord {
+	return entity.MediaSessionRecord{
 		ID:                    vo.RoomID(row.ID),
 		SessionID:             vo.SessionID(row.SessionID),
 		ConversationID:        vo.ConversationID(row.ConversationID),
 		UserID:                row.UserID,
 		Status:                vo.RoomStatus(row.Status),
-		Participants:          make(map[vo.ParticipantID]entity.Participant),
 		LastRealtimeEventType: row.LastRealtimeEventType,
 		LastRealtimeEventAt:   row.LastRealtimeEventAt,
 		CreatedAt:             row.CreatedAt,

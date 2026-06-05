@@ -94,10 +94,6 @@ func (f fakeStateReporterService) CreateSession(ctx context.Context, req session
 	return sessiondto.CreateSessionResponse{}, nil
 }
 
-func (f fakeStateReporterService) AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferRequest) (sessiondto.AcceptOfferResponse, error) {
-	return sessiondto.AcceptOfferResponse{}, nil
-}
-
 func (f fakeStateReporterService) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
 	return sessiondto.LeaveParticipantResponse{}, nil
 }

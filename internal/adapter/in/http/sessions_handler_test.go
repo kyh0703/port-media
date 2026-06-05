@@ -16,8 +16,8 @@ import (
 	"go.uber.org/zap"
 )
 
-type fakeSessionUsecase struct {
-	offerReq sessiondto.AcceptOfferRequest
+type fakeSessionUsecases struct {
+	offerReq sessiondto.JoinSessionCommand
 	leaveReq sessiondto.LeaveParticipantRequest
 	endReq   sessiondto.EndSessionRequest
 	status   sessiondto.GetSessionStatusResponse
@@ -36,22 +36,22 @@ func (v fakeMediaTokenVerifier) Verify(ctx context.Context, raw string) (corepor
 	return v.token, v.err
 }
 
-func (f *fakeSessionUsecase) CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error) {
+func (f *fakeSessionUsecases) CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error) {
 	_ = ctx
 	_ = req
 	return sessiondto.CreateSessionResponse{}, nil
 }
 
-func (f *fakeSessionUsecase) AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferRequest) (sessiondto.AcceptOfferResponse, error) {
+func (f *fakeSessionUsecases) JoinSession(ctx context.Context, req sessiondto.JoinSessionCommand) (sessiondto.JoinSessionResult, error) {
 	_ = ctx
 	f.offerReq = req
 	if f.offerErr != nil {
-		return sessiondto.AcceptOfferResponse{}, f.offerErr
+		return sessiondto.JoinSessionResult{}, f.offerErr
 	}
-	return sessiondto.AcceptOfferResponse{SDPAnswer: "answer-sdp", RoomID: "room-1", ParticipantID: "participant-1"}, nil
+	return sessiondto.JoinSessionResult{SDPAnswer: "answer-sdp", RoomID: "room-1", ParticipantID: "participant-1"}, nil
 }
 
-func (f *fakeSessionUsecase) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
+func (f *fakeSessionUsecases) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
 	_ = ctx
 	f.leaveReq = req
 	return sessiondto.LeaveParticipantResponse{
@@ -62,7 +62,7 @@ func (f *fakeSessionUsecase) LeaveParticipant(ctx context.Context, req sessiondt
 	}, nil
 }
 
-func (f *fakeSessionUsecase) EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error) {
+func (f *fakeSessionUsecases) EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error) {
 	_ = ctx
 	f.endReq = req
 	return sessiondto.EndSessionResponse{
@@ -72,7 +72,7 @@ func (f *fakeSessionUsecase) EndSession(ctx context.Context, req sessiondto.EndS
 	}, nil
 }
 
-func (f *fakeSessionUsecase) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error) {
+func (f *fakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error) {
 	_ = ctx
 	if f.status.SessionID == "" {
 		f.status.SessionID = req.SessionID
@@ -80,13 +80,24 @@ func (f *fakeSessionUsecase) GetSessionStatus(ctx context.Context, req sessiondt
 	return f.status, f.found, nil
 }
 
-func (f *fakeSessionUsecase) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
+func (f *fakeSessionUsecases) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
 	_ = ctx
 	return sessiondto.RuntimeStatsResponse{}, nil
 }
 
+func newFakeSessionsHandler(session *fakeSessionUsecases, tokenVerifier coreport.MediaTokenVerifier) *SessionsHandler {
+	return NewSessionsHandler(SessionsHandlerParams{
+		CreateSession: session,
+		JoinSession:   session,
+		Leave:         session,
+		End:           session,
+		Status:        session,
+		TokenVerifier: tokenVerifier,
+	})
+}
+
 func TestSessionsHandlerGetsSessionStatusWithMediaToken(t *testing.T) {
-	usecase := &fakeSessionUsecase{
+	usecase := &fakeSessionUsecases{
 		found: true,
 		status: sessiondto.GetSessionStatusResponse{
 			SessionID:       "session-1",
@@ -99,7 +110,7 @@ func TestSessionsHandlerGetsSessionStatusWithMediaToken(t *testing.T) {
 			Participants:    2,
 		},
 	}
-	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
+	handler := newFakeSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
@@ -129,14 +140,14 @@ func TestSessionsHandlerGetsSessionStatusWithMediaToken(t *testing.T) {
 	}
 }
 
-func (f *fakeSessionUsecase) GetHealth(ctx context.Context) error {
+func (f *fakeSessionUsecases) GetHealth(ctx context.Context) error {
 	_ = ctx
 	return nil
 }
 
 func TestSessionsHandlerEndsSessionWithMediaToken(t *testing.T) {
-	usecase := &fakeSessionUsecase{}
-	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
+	usecase := &fakeSessionUsecases{}
+	handler := newFakeSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
@@ -176,8 +187,8 @@ func TestSessionsHandlerEndsSessionWithMediaToken(t *testing.T) {
 }
 
 func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
-	usecase := &fakeSessionUsecase{}
-	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
+	usecase := &fakeSessionUsecases{}
+	handler := newFakeSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
@@ -241,8 +252,8 @@ func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
 }
 
 func TestSessionsHandlerAcceptsListenerJoinMode(t *testing.T) {
-	usecase := &fakeSessionUsecase{}
-	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
+	usecase := &fakeSessionUsecases{}
+	handler := newFakeSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
@@ -281,8 +292,8 @@ func TestSessionsHandlerAcceptsListenerJoinMode(t *testing.T) {
 }
 
 func TestSessionsHandlerLeavesParticipantWithMediaToken(t *testing.T) {
-	usecase := &fakeSessionUsecase{}
-	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
+	usecase := &fakeSessionUsecases{}
+	handler := newFakeSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
@@ -342,8 +353,8 @@ func TestSessionsHandlerLeavesParticipantWithMediaToken(t *testing.T) {
 }
 
 func TestSessionsHandlerRejectsJoinWithoutMediaToken(t *testing.T) {
-	usecase := &fakeSessionUsecase{}
-	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{err: coreport.ErrMissingMediaToken})
+	usecase := &fakeSessionUsecases{}
+	handler := newFakeSessionsHandler(usecase, fakeMediaTokenVerifier{err: coreport.ErrMissingMediaToken})
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
@@ -389,8 +400,8 @@ func TestSessionsHandlerRejectsJoinWithoutMediaToken(t *testing.T) {
 }
 
 func TestSessionsHandlerRejectsSessionMismatch(t *testing.T) {
-	usecase := &fakeSessionUsecase{}
-	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
+	usecase := &fakeSessionUsecases{}
+	handler := newFakeSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: coreport.MediaToken{
 			SessionID:      "other-session",
 			ConversationID: "conversation-1",

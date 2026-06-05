@@ -10,7 +10,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 )
 
-type FakeRoomRepository struct {
+type FakeMediaSessionRecordRepository struct {
 	DeleteStub        func(context.Context, vo.RoomID) error
 	deleteMutex       sync.RWMutex
 	deleteArgsForCall []struct {
@@ -23,27 +23,27 @@ type FakeRoomRepository struct {
 	deleteReturnsOnCall map[int]struct {
 		result1 error
 	}
-	FindBySessionIDStub        func(context.Context, vo.SessionID) (entity.Room, bool, error)
+	FindBySessionIDStub        func(context.Context, vo.SessionID) (entity.MediaSessionRecord, bool, error)
 	findBySessionIDMutex       sync.RWMutex
 	findBySessionIDArgsForCall []struct {
 		arg1 context.Context
 		arg2 vo.SessionID
 	}
 	findBySessionIDReturns struct {
-		result1 entity.Room
+		result1 entity.MediaSessionRecord
 		result2 bool
 		result3 error
 	}
 	findBySessionIDReturnsOnCall map[int]struct {
-		result1 entity.Room
+		result1 entity.MediaSessionRecord
 		result2 bool
 		result3 error
 	}
-	SaveStub        func(context.Context, entity.Room) error
+	SaveStub        func(context.Context, entity.MediaSessionRecord) error
 	saveMutex       sync.RWMutex
 	saveArgsForCall []struct {
 		arg1 context.Context
-		arg2 entity.Room
+		arg2 entity.MediaSessionRecord
 	}
 	saveReturns struct {
 		result1 error
@@ -55,7 +55,7 @@ type FakeRoomRepository struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRoomRepository) Delete(arg1 context.Context, arg2 vo.RoomID) error {
+func (fake *FakeMediaSessionRecordRepository) Delete(arg1 context.Context, arg2 vo.RoomID) error {
 	fake.deleteMutex.Lock()
 	ret, specificReturn := fake.deleteReturnsOnCall[len(fake.deleteArgsForCall)]
 	fake.deleteArgsForCall = append(fake.deleteArgsForCall, struct {
@@ -75,26 +75,26 @@ func (fake *FakeRoomRepository) Delete(arg1 context.Context, arg2 vo.RoomID) err
 	return fakeReturns.result1
 }
 
-func (fake *FakeRoomRepository) DeleteCallCount() int {
+func (fake *FakeMediaSessionRecordRepository) DeleteCallCount() int {
 	fake.deleteMutex.RLock()
 	defer fake.deleteMutex.RUnlock()
 	return len(fake.deleteArgsForCall)
 }
 
-func (fake *FakeRoomRepository) DeleteCalls(stub func(context.Context, vo.RoomID) error) {
+func (fake *FakeMediaSessionRecordRepository) DeleteCalls(stub func(context.Context, vo.RoomID) error) {
 	fake.deleteMutex.Lock()
 	defer fake.deleteMutex.Unlock()
 	fake.DeleteStub = stub
 }
 
-func (fake *FakeRoomRepository) DeleteArgsForCall(i int) (context.Context, vo.RoomID) {
+func (fake *FakeMediaSessionRecordRepository) DeleteArgsForCall(i int) (context.Context, vo.RoomID) {
 	fake.deleteMutex.RLock()
 	defer fake.deleteMutex.RUnlock()
 	argsForCall := fake.deleteArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRoomRepository) DeleteReturns(result1 error) {
+func (fake *FakeMediaSessionRecordRepository) DeleteReturns(result1 error) {
 	fake.deleteMutex.Lock()
 	defer fake.deleteMutex.Unlock()
 	fake.DeleteStub = nil
@@ -103,7 +103,7 @@ func (fake *FakeRoomRepository) DeleteReturns(result1 error) {
 	}{result1}
 }
 
-func (fake *FakeRoomRepository) DeleteReturnsOnCall(i int, result1 error) {
+func (fake *FakeMediaSessionRecordRepository) DeleteReturnsOnCall(i int, result1 error) {
 	fake.deleteMutex.Lock()
 	defer fake.deleteMutex.Unlock()
 	fake.DeleteStub = nil
@@ -117,7 +117,7 @@ func (fake *FakeRoomRepository) DeleteReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeRoomRepository) FindBySessionID(arg1 context.Context, arg2 vo.SessionID) (entity.Room, bool, error) {
+func (fake *FakeMediaSessionRecordRepository) FindBySessionID(arg1 context.Context, arg2 vo.SessionID) (entity.MediaSessionRecord, bool, error) {
 	fake.findBySessionIDMutex.Lock()
 	ret, specificReturn := fake.findBySessionIDReturnsOnCall[len(fake.findBySessionIDArgsForCall)]
 	fake.findBySessionIDArgsForCall = append(fake.findBySessionIDArgsForCall, struct {
@@ -137,60 +137,60 @@ func (fake *FakeRoomRepository) FindBySessionID(arg1 context.Context, arg2 vo.Se
 	return fakeReturns.result1, fakeReturns.result2, fakeReturns.result3
 }
 
-func (fake *FakeRoomRepository) FindBySessionIDCallCount() int {
+func (fake *FakeMediaSessionRecordRepository) FindBySessionIDCallCount() int {
 	fake.findBySessionIDMutex.RLock()
 	defer fake.findBySessionIDMutex.RUnlock()
 	return len(fake.findBySessionIDArgsForCall)
 }
 
-func (fake *FakeRoomRepository) FindBySessionIDCalls(stub func(context.Context, vo.SessionID) (entity.Room, bool, error)) {
+func (fake *FakeMediaSessionRecordRepository) FindBySessionIDCalls(stub func(context.Context, vo.SessionID) (entity.MediaSessionRecord, bool, error)) {
 	fake.findBySessionIDMutex.Lock()
 	defer fake.findBySessionIDMutex.Unlock()
 	fake.FindBySessionIDStub = stub
 }
 
-func (fake *FakeRoomRepository) FindBySessionIDArgsForCall(i int) (context.Context, vo.SessionID) {
+func (fake *FakeMediaSessionRecordRepository) FindBySessionIDArgsForCall(i int) (context.Context, vo.SessionID) {
 	fake.findBySessionIDMutex.RLock()
 	defer fake.findBySessionIDMutex.RUnlock()
 	argsForCall := fake.findBySessionIDArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRoomRepository) FindBySessionIDReturns(result1 entity.Room, result2 bool, result3 error) {
+func (fake *FakeMediaSessionRecordRepository) FindBySessionIDReturns(result1 entity.MediaSessionRecord, result2 bool, result3 error) {
 	fake.findBySessionIDMutex.Lock()
 	defer fake.findBySessionIDMutex.Unlock()
 	fake.FindBySessionIDStub = nil
 	fake.findBySessionIDReturns = struct {
-		result1 entity.Room
+		result1 entity.MediaSessionRecord
 		result2 bool
 		result3 error
 	}{result1, result2, result3}
 }
 
-func (fake *FakeRoomRepository) FindBySessionIDReturnsOnCall(i int, result1 entity.Room, result2 bool, result3 error) {
+func (fake *FakeMediaSessionRecordRepository) FindBySessionIDReturnsOnCall(i int, result1 entity.MediaSessionRecord, result2 bool, result3 error) {
 	fake.findBySessionIDMutex.Lock()
 	defer fake.findBySessionIDMutex.Unlock()
 	fake.FindBySessionIDStub = nil
 	if fake.findBySessionIDReturnsOnCall == nil {
 		fake.findBySessionIDReturnsOnCall = make(map[int]struct {
-			result1 entity.Room
+			result1 entity.MediaSessionRecord
 			result2 bool
 			result3 error
 		})
 	}
 	fake.findBySessionIDReturnsOnCall[i] = struct {
-		result1 entity.Room
+		result1 entity.MediaSessionRecord
 		result2 bool
 		result3 error
 	}{result1, result2, result3}
 }
 
-func (fake *FakeRoomRepository) Save(arg1 context.Context, arg2 entity.Room) error {
+func (fake *FakeMediaSessionRecordRepository) Save(arg1 context.Context, arg2 entity.MediaSessionRecord) error {
 	fake.saveMutex.Lock()
 	ret, specificReturn := fake.saveReturnsOnCall[len(fake.saveArgsForCall)]
 	fake.saveArgsForCall = append(fake.saveArgsForCall, struct {
 		arg1 context.Context
-		arg2 entity.Room
+		arg2 entity.MediaSessionRecord
 	}{arg1, arg2})
 	stub := fake.SaveStub
 	fakeReturns := fake.saveReturns
@@ -205,26 +205,26 @@ func (fake *FakeRoomRepository) Save(arg1 context.Context, arg2 entity.Room) err
 	return fakeReturns.result1
 }
 
-func (fake *FakeRoomRepository) SaveCallCount() int {
+func (fake *FakeMediaSessionRecordRepository) SaveCallCount() int {
 	fake.saveMutex.RLock()
 	defer fake.saveMutex.RUnlock()
 	return len(fake.saveArgsForCall)
 }
 
-func (fake *FakeRoomRepository) SaveCalls(stub func(context.Context, entity.Room) error) {
+func (fake *FakeMediaSessionRecordRepository) SaveCalls(stub func(context.Context, entity.MediaSessionRecord) error) {
 	fake.saveMutex.Lock()
 	defer fake.saveMutex.Unlock()
 	fake.SaveStub = stub
 }
 
-func (fake *FakeRoomRepository) SaveArgsForCall(i int) (context.Context, entity.Room) {
+func (fake *FakeMediaSessionRecordRepository) SaveArgsForCall(i int) (context.Context, entity.MediaSessionRecord) {
 	fake.saveMutex.RLock()
 	defer fake.saveMutex.RUnlock()
 	argsForCall := fake.saveArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRoomRepository) SaveReturns(result1 error) {
+func (fake *FakeMediaSessionRecordRepository) SaveReturns(result1 error) {
 	fake.saveMutex.Lock()
 	defer fake.saveMutex.Unlock()
 	fake.SaveStub = nil
@@ -233,7 +233,7 @@ func (fake *FakeRoomRepository) SaveReturns(result1 error) {
 	}{result1}
 }
 
-func (fake *FakeRoomRepository) SaveReturnsOnCall(i int, result1 error) {
+func (fake *FakeMediaSessionRecordRepository) SaveReturnsOnCall(i int, result1 error) {
 	fake.saveMutex.Lock()
 	defer fake.saveMutex.Unlock()
 	fake.SaveStub = nil
@@ -247,7 +247,7 @@ func (fake *FakeRoomRepository) SaveReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeRoomRepository) Invocations() map[string][][]interface{} {
+func (fake *FakeMediaSessionRecordRepository) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
@@ -257,7 +257,7 @@ func (fake *FakeRoomRepository) Invocations() map[string][][]interface{} {
 	return copiedInvocations
 }
 
-func (fake *FakeRoomRepository) recordInvocation(key string, args []interface{}) {
+func (fake *FakeMediaSessionRecordRepository) recordInvocation(key string, args []interface{}) {
 	fake.invocationsMutex.Lock()
 	defer fake.invocationsMutex.Unlock()
 	if fake.invocations == nil {
@@ -269,4 +269,4 @@ func (fake *FakeRoomRepository) recordInvocation(key string, args []interface{})
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ repository.RoomRepository = new(FakeRoomRepository)
+var _ repository.MediaSessionRecordRepository = new(FakeMediaSessionRecordRepository)

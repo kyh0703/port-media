@@ -7,6 +7,7 @@ import (
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository"
+	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 )
 
 type MediaServerStateReporterOptions struct {
@@ -18,7 +19,7 @@ type MediaServerStateReporterOptions struct {
 
 type MediaServerStateReporter struct {
 	states      repository.MediaServerStateRepository
-	svc         Service
+	stats       usecase.GetRuntimeStatsQuery
 	id          string
 	url         string
 	status      entity.MediaServerStatus
@@ -28,7 +29,7 @@ type MediaServerStateReporter struct {
 
 func NewMediaServerStateReporter(
 	states repository.MediaServerStateRepository,
-	svc Service,
+	stats usecase.GetRuntimeStatsQuery,
 	options MediaServerStateReporterOptions,
 ) *MediaServerStateReporter {
 	if options.URL == "" {
@@ -39,7 +40,7 @@ func NewMediaServerStateReporter(
 	}
 	return &MediaServerStateReporter{
 		states:      states,
-		svc:         svc,
+		stats:       stats,
 		id:          options.ID,
 		url:         options.URL,
 		status:      options.Status,
@@ -71,7 +72,7 @@ func (r *MediaServerStateReporter) ReportOffline(ctx context.Context) error {
 }
 
 func (r *MediaServerStateReporter) state(ctx context.Context, status entity.MediaServerStatus) (entity.MediaServerState, error) {
-	stats, err := r.svc.GetRuntimeStats(ctx)
+	stats, err := r.stats.GetRuntimeStats(ctx)
 	if err != nil {
 		return entity.MediaServerState{}, fmt.Errorf("get runtime stats for media server state: %w", err)
 	}

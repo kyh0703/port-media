@@ -7,21 +7,21 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 )
 
-type memoryRoomRepositoryForTest struct {
+type memoryRoomRuntimeRepositoryForTest struct {
 	rooms map[vo.RoomID]entity.Room
 }
 
-func newMemoryRoomRepositoryForTest() *memoryRoomRepositoryForTest {
-	return &memoryRoomRepositoryForTest{rooms: make(map[vo.RoomID]entity.Room)}
+func newMemoryRoomRuntimeRepositoryForTest() *memoryRoomRuntimeRepositoryForTest {
+	return &memoryRoomRuntimeRepositoryForTest{rooms: make(map[vo.RoomID]entity.Room)}
 }
 
-func (r *memoryRoomRepositoryForTest) Save(ctx context.Context, room entity.Room) error {
+func (r *memoryRoomRuntimeRepositoryForTest) Save(ctx context.Context, room entity.Room) error {
 	_ = ctx
 	r.rooms[room.ID] = room
 	return nil
 }
 
-func (r *memoryRoomRepositoryForTest) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.Room, bool, error) {
+func (r *memoryRoomRuntimeRepositoryForTest) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.Room, bool, error) {
 	_ = ctx
 	for _, room := range r.rooms {
 		if room.SessionID == sessionID {
@@ -31,7 +31,7 @@ func (r *memoryRoomRepositoryForTest) FindBySessionID(ctx context.Context, sessi
 	return entity.Room{}, false, nil
 }
 
-func (r *memoryRoomRepositoryForTest) List(ctx context.Context) ([]entity.Room, error) {
+func (r *memoryRoomRuntimeRepositoryForTest) List(ctx context.Context) ([]entity.Room, error) {
 	_ = ctx
 	rooms := make([]entity.Room, 0, len(r.rooms))
 	for _, room := range r.rooms {
@@ -40,8 +40,38 @@ func (r *memoryRoomRepositoryForTest) List(ctx context.Context) ([]entity.Room, 
 	return rooms, nil
 }
 
-func (r *memoryRoomRepositoryForTest) Delete(ctx context.Context, roomID vo.RoomID) error {
+func (r *memoryRoomRuntimeRepositoryForTest) Delete(ctx context.Context, roomID vo.RoomID) error {
 	_ = ctx
 	delete(r.rooms, roomID)
+	return nil
+}
+
+type memoryMediaSessionRecordRepositoryForTest struct {
+	records map[vo.RoomID]entity.MediaSessionRecord
+}
+
+func newMemoryMediaSessionRecordRepositoryForTest() *memoryMediaSessionRecordRepositoryForTest {
+	return &memoryMediaSessionRecordRepositoryForTest{records: make(map[vo.RoomID]entity.MediaSessionRecord)}
+}
+
+func (r *memoryMediaSessionRecordRepositoryForTest) Save(ctx context.Context, record entity.MediaSessionRecord) error {
+	_ = ctx
+	r.records[record.ID] = record
+	return nil
+}
+
+func (r *memoryMediaSessionRecordRepositoryForTest) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionRecord, bool, error) {
+	_ = ctx
+	for _, record := range r.records {
+		if record.SessionID == sessionID {
+			return record, true, nil
+		}
+	}
+	return entity.MediaSessionRecord{}, false, nil
+}
+
+func (r *memoryMediaSessionRecordRepositoryForTest) Delete(ctx context.Context, roomID vo.RoomID) error {
+	_ = ctx
+	delete(r.records, roomID)
 	return nil
 }

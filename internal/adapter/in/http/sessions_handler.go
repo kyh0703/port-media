@@ -12,15 +12,38 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/response"
+	"go.uber.org/fx"
 )
 
 type SessionsHandler struct {
-	session       usecase.SessionUsecase
+	createSession usecase.CreateSessionUsecase
+	joinSession   usecase.JoinSessionUsecase
+	leave         usecase.LeaveParticipantUsecase
+	end           usecase.EndSessionUsecase
+	status        usecase.GetSessionStatusQuery
 	tokenVerifier coreport.MediaTokenVerifier
 }
 
-func NewSessionsHandler(session usecase.SessionUsecase, tokenVerifier coreport.MediaTokenVerifier) *SessionsHandler {
-	return &SessionsHandler{session: session, tokenVerifier: tokenVerifier}
+type SessionsHandlerParams struct {
+	fx.In
+
+	CreateSession usecase.CreateSessionUsecase
+	JoinSession   usecase.JoinSessionUsecase
+	Leave         usecase.LeaveParticipantUsecase
+	End           usecase.EndSessionUsecase
+	Status        usecase.GetSessionStatusQuery
+	TokenVerifier coreport.MediaTokenVerifier
+}
+
+func NewSessionsHandler(params SessionsHandlerParams) *SessionsHandler {
+	return &SessionsHandler{
+		createSession: params.CreateSession,
+		joinSession:   params.JoinSession,
+		leave:         params.Leave,
+		end:           params.End,
+		status:        params.Status,
+		tokenVerifier: params.TokenVerifier,
+	}
 }
 
 func (h *SessionsHandler) Table() []Mapper {
@@ -39,7 +62,7 @@ func (h *SessionsHandler) Create(w http.ResponseWriter, r *http.Request) error {
 		return exception.New(exception.CodeBadRequest, "invalid session request", http.StatusBadRequest)
 	}
 
-	res, err := h.session.CreateSession(r.Context(), req)
+	res, err := h.createSession.CreateSession(r.Context(), req)
 	if err != nil {
 		return err
 	}
@@ -53,7 +76,7 @@ func (h *SessionsHandler) GetStatus(w http.ResponseWriter, r *http.Request) erro
 		return err
 	}
 
-	res, found, err := h.session.GetSessionStatus(r.Context(), sessiondto.GetSessionStatusRequest{
+	res, found, err := h.status.GetSessionStatus(r.Context(), sessiondto.GetSessionStatusRequest{
 		SessionID: claims.SessionID,
 	})
 	if err != nil {
@@ -88,7 +111,7 @@ func (h *SessionsHandler) Join(w http.ResponseWriter, r *http.Request) error {
 		return exception.New(exception.CodeBadRequest, "invalid join mode", http.StatusBadRequest)
 	}
 
-	res, err := h.session.AcceptOffer(r.Context(), sessiondto.AcceptOfferRequest{
+	res, err := h.joinSession.JoinSession(r.Context(), sessiondto.JoinSessionCommand{
 		SessionID:      claims.SessionID,
 		ConversationID: claims.ConversationID,
 		UserID:         claims.UserID,
@@ -96,6 +119,9 @@ func (h *SessionsHandler) Join(w http.ResponseWriter, r *http.Request) error {
 		AudioMode:      audioMode,
 	})
 	if err != nil {
+		if errors.Is(err, usecase.ErrSessionNotJoinable) {
+			return exception.New(exception.CodeConflict, "media session is not joinable", http.StatusConflict)
+		}
 		return err
 	}
 
@@ -112,7 +138,7 @@ func (h *SessionsHandler) LeaveParticipant(w http.ResponseWriter, r *http.Reques
 		return err
 	}
 
-	res, err := h.session.LeaveParticipant(r.Context(), sessiondto.LeaveParticipantRequest{
+	res, err := h.leave.LeaveParticipant(r.Context(), sessiondto.LeaveParticipantRequest{
 		SessionID:      claims.SessionID,
 		ConversationID: claims.ConversationID,
 		UserID:         claims.UserID,
@@ -131,7 +157,7 @@ func (h *SessionsHandler) End(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	res, err := h.session.EndSession(r.Context(), sessiondto.EndSessionRequest{
+	res, err := h.end.EndSession(r.Context(), sessiondto.EndSessionRequest{
 		SessionID:      claims.SessionID,
 		ConversationID: claims.ConversationID,
 		UserID:         claims.UserID,

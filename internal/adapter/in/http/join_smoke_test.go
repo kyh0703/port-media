@@ -35,22 +35,29 @@ func TestJoinEndpointSmokeWithPionClient(t *testing.T) {
 		t.Fatalf("NewEngine() error = %v", err)
 	}
 
-	rooms := newSmokeRoomRepository()
+	records := newSmokeMediaSessionRecordRepository()
 	runtime := corerepo.NewMemoryRoomRuntimeRepository()
 	states := newSmokeMediaSessionStateRepository()
 	provider := newSmokeRealtimeProvider(t)
-	svc := sessionservice.NewService(rooms, runtime, states, rtc.NewGateway(media), provider)
+	svc := sessionservice.NewService(records, runtime, states, rtc.NewGateway(media), provider)
 	if _, err := svc.CreateSession(context.Background(), sessiondto.CreateSessionRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 	}); err != nil {
 		t.Fatalf("CreateSession() error = %v", err)
 	}
-	handler := NewSessionsHandler(svc, fakeMediaTokenVerifier{
-		token: port.MediaToken{
-			SessionID:      "session-1",
-			ConversationID: "conversation-1",
-			UserID:         "user-1",
+	handler := NewSessionsHandler(SessionsHandlerParams{
+		CreateSession: svc,
+		JoinSession:   svc,
+		Leave:         svc,
+		End:           svc,
+		Status:        svc,
+		TokenVerifier: fakeMediaTokenVerifier{
+			token: port.MediaToken{
+				SessionID:      "session-1",
+				ConversationID: "conversation-1",
+				UserID:         "user-1",
+			},
 		},
 	})
 
@@ -201,37 +208,37 @@ func (p *smokeRealtimeProvider) HangupCall(ctx context.Context, providerCallID s
 	return nil
 }
 
-func newSmokeRoomRepository() *repositoryfakes.FakeRoomRepository {
+func newSmokeMediaSessionRecordRepository() *repositoryfakes.FakeMediaSessionRecordRepository {
 	var mu sync.RWMutex
-	rooms := make(map[vo.RoomID]entity.Room)
-	repo := &repositoryfakes.FakeRoomRepository{}
+	records := make(map[vo.RoomID]entity.MediaSessionRecord)
+	repo := &repositoryfakes.FakeMediaSessionRecordRepository{}
 
-	repo.SaveCalls(func(ctx context.Context, room entity.Room) error {
+	repo.SaveCalls(func(ctx context.Context, record entity.MediaSessionRecord) error {
 		_ = ctx
 		mu.Lock()
 		defer mu.Unlock()
 
-		rooms[room.ID] = room
+		records[record.ID] = record
 		return nil
 	})
-	repo.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.Room, bool, error) {
+	repo.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionRecord, bool, error) {
 		_ = ctx
 		mu.RLock()
 		defer mu.RUnlock()
 
-		for _, room := range rooms {
-			if room.SessionID == sessionID {
-				return room, true, nil
+		for _, record := range records {
+			if record.SessionID == sessionID {
+				return record, true, nil
 			}
 		}
-		return entity.Room{}, false, nil
+		return entity.MediaSessionRecord{}, false, nil
 	})
 	repo.DeleteCalls(func(ctx context.Context, roomID vo.RoomID) error {
 		_ = ctx
 		mu.Lock()
 		defer mu.Unlock()
 
-		delete(rooms, roomID)
+		delete(records, roomID)
 		return nil
 	})
 

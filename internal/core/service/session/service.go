@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -20,19 +21,19 @@ import (
 //counterfeiter:generate . Service
 
 type Service interface {
-	CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error)
-	AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferRequest) (sessiondto.AcceptOfferResponse, error)
-	LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error)
-	EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error)
+	usecase.CreateSessionUsecase
+	usecase.JoinSessionUsecase
+	usecase.LeaveParticipantUsecase
+	usecase.EndSessionUsecase
+	usecase.GetSessionStatusQuery
+	usecase.GetRuntimeStatsQuery
+	usecase.GetHealthQuery
 	CleanupIdleRooms(ctx context.Context, idleTimeout time.Duration) (int, error)
 	ShutdownActiveRooms(ctx context.Context) (int, error)
-	GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error)
-	GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error)
-	GetHealth(ctx context.Context) error
 }
 
 type service struct {
-	rooms     repository.RoomRepository
+	records   repository.MediaSessionRecordRepository
 	runtime   repository.RoomRuntimeRepository
 	states    sessionreadmodel.MediaSessionStateRepository
 	media     port.MediaGateway
@@ -61,28 +62,28 @@ type ServiceOptions struct {
 }
 
 func NewService(
-	rooms repository.RoomRepository,
+	records repository.MediaSessionRecordRepository,
 	runtime repository.RoomRuntimeRepository,
 	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.NewNop())
+	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.NewNop())
 }
 
 func NewServiceWithOptions(
-	rooms repository.RoomRepository,
+	records repository.MediaSessionRecordRepository,
 	runtime repository.RoomRuntimeRepository,
 	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
 	options ServiceOptions,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromOptions(options), zap.NewNop())
+	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromOptions(options), zap.NewNop())
 }
 
 func NewServiceWithOptionsAndLogger(
-	rooms repository.RoomRepository,
+	records repository.MediaSessionRecordRepository,
 	runtime repository.RoomRuntimeRepository,
 	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
@@ -90,11 +91,11 @@ func NewServiceWithOptionsAndLogger(
 	options ServiceOptions,
 	log *zap.Logger,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromOptions(options), log)
+	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromOptions(options), log)
 }
 
 func NewServiceWithOptionsLoggerAndPublisher(
-	rooms repository.RoomRepository,
+	records repository.MediaSessionRecordRepository,
 	runtime repository.RoomRuntimeRepository,
 	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
@@ -103,11 +104,11 @@ func NewServiceWithOptionsLoggerAndPublisher(
 	options ServiceOptions,
 	log *zap.Logger,
 ) Service {
-	return newService(rooms, runtime, states, media, provider, events, realtimeControlConfigFromOptions(options), log)
+	return newService(records, runtime, states, media, provider, events, realtimeControlConfigFromOptions(options), log)
 }
 
 func newService(
-	rooms repository.RoomRepository,
+	records repository.MediaSessionRecordRepository,
 	runtime repository.RoomRuntimeRepository,
 	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
@@ -124,7 +125,7 @@ func newService(
 	}
 	realtimeEvents := realtimeEventPolicy{}
 	return &service{
-		rooms:     rooms,
+		records:   records,
 		runtime:   runtime,
 		states:    states,
 		media:     media,
@@ -182,7 +183,7 @@ func (s *service) CreateSession(ctx context.Context, req sessiondto.CreateSessio
 	roomID := vo.NewRoomID()
 	room := entity.NewRoom(roomID, sessionID, conversationID, now)
 
-	if err := s.rooms.Save(ctx, room); err != nil {
+	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
 		return sessiondto.CreateSessionResponse{}, err
 	}
 
@@ -194,7 +195,7 @@ func (s *service) CreateSession(ctx context.Context, req sessiondto.CreateSessio
 	}, nil
 }
 
-func (s *service) AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferRequest) (sessiondto.AcceptOfferResponse, error) {
+func (s *service) JoinSession(ctx context.Context, req sessiondto.JoinSessionCommand) (sessiondto.JoinSessionResult, error) {
 	now := s.now().UTC()
 	sessionID := vo.SessionID(req.SessionID)
 	unlock := s.lockSession(sessionID)
@@ -202,23 +203,29 @@ func (s *service) AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferReq
 
 	room, err := s.findSessionRoom(ctx, sessionID)
 	if err != nil {
-		return sessiondto.AcceptOfferResponse{}, err
+		return sessiondto.JoinSessionResult{}, err
+	}
+	if !room.CanJoinParticipants() {
+		return sessiondto.JoinSessionResult{}, usecase.ErrSessionNotJoinable
 	}
 	publishAudio := req.PublishesAudio()
 	room.SetUserID(req.UserID, now)
 
 	participant, peer, err := s.acceptClientParticipant(ctx, sessionID, req.SDP, publishAudio, now)
 	if err != nil {
-		return sessiondto.AcceptOfferResponse{}, err
+		return sessiondto.JoinSessionResult{}, err
 	}
-	room.AddParticipant(participant, now)
+	if err := room.JoinClient(participant, now); err != nil {
+		_ = s.media.CloseParticipant(ctx, sessionID, participant.ID)
+		return sessiondto.JoinSessionResult{}, toJoinSessionError(err)
+	}
 
 	if err := s.ensureOpenAIParticipant(ctx, &room, sessionID, req.UserID, now); err != nil {
-		return sessiondto.AcceptOfferResponse{}, err
+		return sessiondto.JoinSessionResult{}, err
 	}
 
 	if err := s.saveActiveRoomState(ctx, room, req.UserID, now); err != nil {
-		return sessiondto.AcceptOfferResponse{}, err
+		return sessiondto.JoinSessionResult{}, err
 	}
 
 	s.logParticipantEvent("media_participant_joined", room, participant,
@@ -234,7 +241,7 @@ func (s *service) AcceptOffer(ctx context.Context, req sessiondto.AcceptOfferReq
 		}
 	}
 
-	return sessiondto.AcceptOfferResponse{
+	return sessiondto.JoinSessionResult{
 		SDPAnswer:     peer.AnswerSDP,
 		RoomID:        string(room.ID),
 		ParticipantID: string(participant.ID),
@@ -250,14 +257,14 @@ func (s *service) findSessionRoom(ctx context.Context, sessionID vo.SessionID) (
 		return room, nil
 	}
 
-	room, found, err = s.rooms.FindBySessionID(ctx, sessionID)
+	record, found, err := s.records.FindBySessionID(ctx, sessionID)
 	if err != nil {
 		return entity.Room{}, err
 	}
 	if !found {
 		return entity.Room{}, usecase.ErrSessionNotFound
 	}
-	return room, nil
+	return record.RuntimeRoom(), nil
 }
 
 func (s *service) acceptClientParticipant(
@@ -299,7 +306,7 @@ func (s *service) ensureOpenAIParticipant(
 	userID string,
 	now time.Time,
 ) error {
-	if room.HasParticipantRole(vo.ParticipantRoleOpenAIAgent) {
+	if room.HasOpenAIAgent() {
 		return nil
 	}
 
@@ -308,15 +315,24 @@ func (s *service) ensureOpenAIParticipant(
 		_ = s.failRoom(ctx, *room, userID, now, "openai_setup_failed")
 		return err
 	}
-	room.AddParticipant(openAIParticipant, now)
+	if err := room.AttachOpenAIAgent(openAIParticipant, now); err != nil {
+		return toJoinSessionError(err)
+	}
 	return nil
+}
+
+func toJoinSessionError(err error) error {
+	if errors.Is(err, entity.ErrRoomNotJoinable) {
+		return usecase.ErrSessionNotJoinable
+	}
+	return err
 }
 
 func (s *service) saveActiveRoomState(ctx context.Context, room entity.Room, userID string, now time.Time) error {
 	if err := s.runtime.Save(ctx, room); err != nil {
 		return err
 	}
-	if err := s.rooms.Save(ctx, room); err != nil {
+	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
 		return err
 	}
 	if err := s.states.Save(ctx, s.project.Project(room, userID, now)); err != nil {
@@ -385,7 +401,7 @@ func (s *service) handleOpenAIDataChannelMessage(message port.DataChannelMessage
 	if err := s.runtime.Save(ctx, room); err != nil {
 		return
 	}
-	if err := s.rooms.Save(ctx, room); err != nil {
+	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
 		return
 	}
 	existingState, _, _ := s.states.FindBySessionID(ctx, message.SessionID)
@@ -449,7 +465,7 @@ func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeavePart
 	if err := s.runtime.Save(ctx, room); err != nil {
 		return sessiondto.LeaveParticipantResponse{}, err
 	}
-	if err := s.rooms.Save(ctx, room); err != nil {
+	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
 		return sessiondto.LeaveParticipantResponse{}, err
 	}
 	if err := s.states.Save(ctx, s.project.Project(room, req.UserID, now)); err != nil {
@@ -480,13 +496,15 @@ func (s *service) EndSession(ctx context.Context, req sessiondto.EndSessionReque
 		return sessiondto.EndSessionResponse{}, err
 	}
 	if !found {
-		room, found, err = s.rooms.FindBySessionID(ctx, sessionID)
+		record, recordFound, recordErr := s.records.FindBySessionID(ctx, sessionID)
+		err = recordErr
 		if err != nil {
 			return sessiondto.EndSessionResponse{}, err
 		}
-		if !found {
+		if !recordFound {
 			return sessiondto.EndSessionResponse{}, nil
 		}
+		room = record.RuntimeRoom()
 	}
 
 	if err := s.closeRoom(ctx, room, req.UserID, now, "explicit_end"); err != nil {
@@ -605,7 +623,7 @@ func (s *service) handleConnectionStateChange(change port.ConnectionStateChange)
 	if err := s.runtime.Save(ctx, room); err != nil {
 		return
 	}
-	if err := s.rooms.Save(ctx, room); err != nil {
+	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
 		return
 	}
 	s.logRoomEvent("media_participant_connection_state_changed", room,
@@ -641,7 +659,7 @@ func (s *service) handleMediaTrackStateChange(change port.MediaTrackStateChange)
 	if err := s.runtime.Save(ctx, room); err != nil {
 		return
 	}
-	if err := s.rooms.Save(ctx, room); err != nil {
+	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
 		return
 	}
 	s.logRoomEvent("media_track_state_changed", room,
@@ -667,7 +685,7 @@ func (s *service) failRoom(ctx context.Context, room entity.Room, userID string,
 	_ = s.hangupOpenAIParticipants(ctx, room)
 	_ = s.media.CloseSession(ctx, room.SessionID)
 	_ = s.runtime.Delete(ctx, room.ID)
-	if err := s.rooms.Save(ctx, room); err != nil {
+	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
 		return err
 	}
 	if err := s.states.Save(ctx, s.project.Project(room, userID, now)); err != nil {
@@ -690,7 +708,7 @@ func (s *service) closeRoom(ctx context.Context, room entity.Room, userID string
 	if err := s.runtime.Delete(ctx, room.ID); err != nil {
 		return err
 	}
-	if err := s.rooms.Save(ctx, room); err != nil {
+	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
 		return err
 	}
 	if err := s.states.Save(ctx, s.project.Project(room, userID, now)); err != nil {

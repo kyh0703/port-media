@@ -11,20 +11,6 @@ import (
 )
 
 type FakeService struct {
-	AcceptOfferStub        func(context.Context, sessiona.AcceptOfferRequest) (sessiona.AcceptOfferResponse, error)
-	acceptOfferMutex       sync.RWMutex
-	acceptOfferArgsForCall []struct {
-		arg1 context.Context
-		arg2 sessiona.AcceptOfferRequest
-	}
-	acceptOfferReturns struct {
-		result1 sessiona.AcceptOfferResponse
-		result2 error
-	}
-	acceptOfferReturnsOnCall map[int]struct {
-		result1 sessiona.AcceptOfferResponse
-		result2 error
-	}
 	CleanupIdleRoomsStub        func(context.Context, time.Duration) (int, error)
 	cleanupIdleRoomsMutex       sync.RWMutex
 	cleanupIdleRoomsArgsForCall []struct {
@@ -107,6 +93,20 @@ type FakeService struct {
 		result2 bool
 		result3 error
 	}
+	JoinSessionStub        func(context.Context, sessiona.JoinSessionCommand) (sessiona.JoinSessionResult, error)
+	joinSessionMutex       sync.RWMutex
+	joinSessionArgsForCall []struct {
+		arg1 context.Context
+		arg2 sessiona.JoinSessionCommand
+	}
+	joinSessionReturns struct {
+		result1 sessiona.JoinSessionResult
+		result2 error
+	}
+	joinSessionReturnsOnCall map[int]struct {
+		result1 sessiona.JoinSessionResult
+		result2 error
+	}
 	LeaveParticipantStub        func(context.Context, sessiona.LeaveParticipantRequest) (sessiona.LeaveParticipantResponse, error)
 	leaveParticipantMutex       sync.RWMutex
 	leaveParticipantArgsForCall []struct {
@@ -136,71 +136,6 @@ type FakeService struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
-}
-
-func (fake *FakeService) AcceptOffer(arg1 context.Context, arg2 sessiona.AcceptOfferRequest) (sessiona.AcceptOfferResponse, error) {
-	fake.acceptOfferMutex.Lock()
-	ret, specificReturn := fake.acceptOfferReturnsOnCall[len(fake.acceptOfferArgsForCall)]
-	fake.acceptOfferArgsForCall = append(fake.acceptOfferArgsForCall, struct {
-		arg1 context.Context
-		arg2 sessiona.AcceptOfferRequest
-	}{arg1, arg2})
-	stub := fake.AcceptOfferStub
-	fakeReturns := fake.acceptOfferReturns
-	fake.recordInvocation("AcceptOffer", []interface{}{arg1, arg2})
-	fake.acceptOfferMutex.Unlock()
-	if stub != nil {
-		return stub(arg1, arg2)
-	}
-	if specificReturn {
-		return ret.result1, ret.result2
-	}
-	return fakeReturns.result1, fakeReturns.result2
-}
-
-func (fake *FakeService) AcceptOfferCallCount() int {
-	fake.acceptOfferMutex.RLock()
-	defer fake.acceptOfferMutex.RUnlock()
-	return len(fake.acceptOfferArgsForCall)
-}
-
-func (fake *FakeService) AcceptOfferCalls(stub func(context.Context, sessiona.AcceptOfferRequest) (sessiona.AcceptOfferResponse, error)) {
-	fake.acceptOfferMutex.Lock()
-	defer fake.acceptOfferMutex.Unlock()
-	fake.AcceptOfferStub = stub
-}
-
-func (fake *FakeService) AcceptOfferArgsForCall(i int) (context.Context, sessiona.AcceptOfferRequest) {
-	fake.acceptOfferMutex.RLock()
-	defer fake.acceptOfferMutex.RUnlock()
-	argsForCall := fake.acceptOfferArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
-}
-
-func (fake *FakeService) AcceptOfferReturns(result1 sessiona.AcceptOfferResponse, result2 error) {
-	fake.acceptOfferMutex.Lock()
-	defer fake.acceptOfferMutex.Unlock()
-	fake.AcceptOfferStub = nil
-	fake.acceptOfferReturns = struct {
-		result1 sessiona.AcceptOfferResponse
-		result2 error
-	}{result1, result2}
-}
-
-func (fake *FakeService) AcceptOfferReturnsOnCall(i int, result1 sessiona.AcceptOfferResponse, result2 error) {
-	fake.acceptOfferMutex.Lock()
-	defer fake.acceptOfferMutex.Unlock()
-	fake.AcceptOfferStub = nil
-	if fake.acceptOfferReturnsOnCall == nil {
-		fake.acceptOfferReturnsOnCall = make(map[int]struct {
-			result1 sessiona.AcceptOfferResponse
-			result2 error
-		})
-	}
-	fake.acceptOfferReturnsOnCall[i] = struct {
-		result1 sessiona.AcceptOfferResponse
-		result2 error
-	}{result1, result2}
 }
 
 func (fake *FakeService) CleanupIdleRooms(arg1 context.Context, arg2 time.Duration) (int, error) {
@@ -589,6 +524,71 @@ func (fake *FakeService) GetSessionStatusReturnsOnCall(i int, result1 sessiona.G
 		result2 bool
 		result3 error
 	}{result1, result2, result3}
+}
+
+func (fake *FakeService) JoinSession(arg1 context.Context, arg2 sessiona.JoinSessionCommand) (sessiona.JoinSessionResult, error) {
+	fake.joinSessionMutex.Lock()
+	ret, specificReturn := fake.joinSessionReturnsOnCall[len(fake.joinSessionArgsForCall)]
+	fake.joinSessionArgsForCall = append(fake.joinSessionArgsForCall, struct {
+		arg1 context.Context
+		arg2 sessiona.JoinSessionCommand
+	}{arg1, arg2})
+	stub := fake.JoinSessionStub
+	fakeReturns := fake.joinSessionReturns
+	fake.recordInvocation("JoinSession", []interface{}{arg1, arg2})
+	fake.joinSessionMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeService) JoinSessionCallCount() int {
+	fake.joinSessionMutex.RLock()
+	defer fake.joinSessionMutex.RUnlock()
+	return len(fake.joinSessionArgsForCall)
+}
+
+func (fake *FakeService) JoinSessionCalls(stub func(context.Context, sessiona.JoinSessionCommand) (sessiona.JoinSessionResult, error)) {
+	fake.joinSessionMutex.Lock()
+	defer fake.joinSessionMutex.Unlock()
+	fake.JoinSessionStub = stub
+}
+
+func (fake *FakeService) JoinSessionArgsForCall(i int) (context.Context, sessiona.JoinSessionCommand) {
+	fake.joinSessionMutex.RLock()
+	defer fake.joinSessionMutex.RUnlock()
+	argsForCall := fake.joinSessionArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeService) JoinSessionReturns(result1 sessiona.JoinSessionResult, result2 error) {
+	fake.joinSessionMutex.Lock()
+	defer fake.joinSessionMutex.Unlock()
+	fake.JoinSessionStub = nil
+	fake.joinSessionReturns = struct {
+		result1 sessiona.JoinSessionResult
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeService) JoinSessionReturnsOnCall(i int, result1 sessiona.JoinSessionResult, result2 error) {
+	fake.joinSessionMutex.Lock()
+	defer fake.joinSessionMutex.Unlock()
+	fake.JoinSessionStub = nil
+	if fake.joinSessionReturnsOnCall == nil {
+		fake.joinSessionReturnsOnCall = make(map[int]struct {
+			result1 sessiona.JoinSessionResult
+			result2 error
+		})
+	}
+	fake.joinSessionReturnsOnCall[i] = struct {
+		result1 sessiona.JoinSessionResult
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeService) LeaveParticipant(arg1 context.Context, arg2 sessiona.LeaveParticipantRequest) (sessiona.LeaveParticipantResponse, error) {
