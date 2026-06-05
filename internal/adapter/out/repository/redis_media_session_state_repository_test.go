@@ -8,8 +8,8 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/kyh0703/portfoilo-media/configs"
-	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
+	sessionreadmodel "github.com/kyh0703/portfoilo-media/internal/core/readmodel/session"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -27,7 +27,7 @@ func TestRedisMediaSessionStateRepositorySavesStateWithTTL(t *testing.T) {
 
 	startedAt := time.Date(2026, 5, 19, 10, 0, 0, 0, time.UTC)
 	lastActiveAt := time.Date(2026, 5, 19, 10, 1, 0, 0, time.UTC)
-	err = repo.Save(context.Background(), entity.MediaSessionState{
+	err = repo.Save(context.Background(), sessionreadmodel.MediaSessionState{
 		SessionID:            vo.SessionID("session-1"),
 		ConversationID:       vo.ConversationID("conversation-1"),
 		UserID:               "user-1",
@@ -37,7 +37,7 @@ func TestRedisMediaSessionStateRepositorySavesStateWithTTL(t *testing.T) {
 		MediaState:           vo.TrackStateActive,
 		OpenAIProviderCallID: "rtc_123",
 		Participants:         2,
-		ParticipantStates: []entity.MediaSessionParticipantState{
+		ParticipantStates: []sessionreadmodel.MediaSessionParticipantState{
 			{
 				ID:              vo.ParticipantID("client-1"),
 				Role:            vo.ParticipantRoleClient,
@@ -48,7 +48,7 @@ func TestRedisMediaSessionStateRepositorySavesStateWithTTL(t *testing.T) {
 		},
 		LastRealtimeEventType: "response.done",
 		LastRealtimeEventAt:   lastActiveAt,
-		RecentRealtimeEvents: []entity.RealtimeEvent{
+		RecentRealtimeEvents: []sessionreadmodel.RealtimeEvent{
 			{Type: "session.updated", At: startedAt},
 			{Type: "response.done", At: lastActiveAt},
 		},
@@ -131,7 +131,7 @@ func TestRedisMediaSessionStateRepositoryFindsState(t *testing.T) {
 
 	startedAt := time.Date(2026, 5, 19, 10, 0, 0, 0, time.UTC)
 	updatedAt := time.Date(2026, 5, 19, 10, 1, 0, 0, time.UTC)
-	err = repo.Save(context.Background(), entity.MediaSessionState{
+	err = repo.Save(context.Background(), sessionreadmodel.MediaSessionState{
 		SessionID:            vo.SessionID("session-1"),
 		ConversationID:       vo.ConversationID("conversation-1"),
 		UserID:               "user-1",
@@ -141,7 +141,7 @@ func TestRedisMediaSessionStateRepositoryFindsState(t *testing.T) {
 		MediaState:           vo.TrackStateActive,
 		OpenAIProviderCallID: "rtc_123",
 		Participants:         2,
-		ParticipantStates: []entity.MediaSessionParticipantState{
+		ParticipantStates: []sessionreadmodel.MediaSessionParticipantState{
 			{
 				ID:              vo.ParticipantID("client-1"),
 				Role:            vo.ParticipantRoleClient,
@@ -152,7 +152,7 @@ func TestRedisMediaSessionStateRepositoryFindsState(t *testing.T) {
 		},
 		LastRealtimeEventType: "session.updated",
 		LastRealtimeEventAt:   updatedAt,
-		RecentRealtimeEvents: []entity.RealtimeEvent{
+		RecentRealtimeEvents: []sessionreadmodel.RealtimeEvent{
 			{Type: "session.updated", At: updatedAt},
 		},
 		StartedAt: startedAt,

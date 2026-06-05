@@ -11,6 +11,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
+	sessionreadmodel "github.com/kyh0703/portfoilo-media/internal/core/readmodel/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 	"go.uber.org/zap"
 )
@@ -33,7 +34,7 @@ type Service interface {
 type service struct {
 	rooms     repository.RoomRepository
 	runtime   repository.RoomRuntimeRepository
-	states    repository.MediaSessionStateRepository
+	states    sessionreadmodel.MediaSessionStateRepository
 	media     port.MediaGateway
 	provider  port.RealtimeProvider
 	events    repository.ConversationEventPublisher
@@ -62,7 +63,7 @@ type ServiceOptions struct {
 func NewService(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
-	states repository.MediaSessionStateRepository,
+	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
 ) Service {
@@ -72,7 +73,7 @@ func NewService(
 func NewServiceWithOptions(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
-	states repository.MediaSessionStateRepository,
+	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
 	options ServiceOptions,
@@ -83,7 +84,7 @@ func NewServiceWithOptions(
 func NewServiceWithOptionsAndLogger(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
-	states repository.MediaSessionStateRepository,
+	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
 	options ServiceOptions,
@@ -95,7 +96,7 @@ func NewServiceWithOptionsAndLogger(
 func NewServiceWithOptionsLoggerAndPublisher(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
-	states repository.MediaSessionStateRepository,
+	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
 	events repository.ConversationEventPublisher,
@@ -108,7 +109,7 @@ func NewServiceWithOptionsLoggerAndPublisher(
 func newService(
 	rooms repository.RoomRepository,
 	runtime repository.RoomRuntimeRepository,
-	states repository.MediaSessionStateRepository,
+	states sessionreadmodel.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
 	events repository.ConversationEventPublisher,

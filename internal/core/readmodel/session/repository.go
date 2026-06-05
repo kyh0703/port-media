@@ -1,9 +1,8 @@
-package repository
+package session
 
 import (
 	"context"
 
-	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 )
 
@@ -11,7 +10,7 @@ import (
 //counterfeiter:generate . MediaSessionStateRepository
 
 type MediaSessionStateRepository interface {
-	Save(ctx context.Context, state entity.MediaSessionState) error
-	FindBySessionID(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error)
+	Save(ctx context.Context, state MediaSessionState) error
+	FindBySessionID(ctx context.Context, sessionID vo.SessionID) (MediaSessionState, bool, error)
 	Delete(ctx context.Context, sessionID vo.SessionID) error
 }

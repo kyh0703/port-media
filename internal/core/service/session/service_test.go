@@ -12,6 +12,8 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
+	sessionreadmodel "github.com/kyh0703/portfoilo-media/internal/core/readmodel/session"
+	"github.com/kyh0703/portfoilo-media/internal/core/readmodel/session/sessionfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
@@ -37,8 +39,8 @@ func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -46,7 +48,7 @@ func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -85,8 +87,8 @@ func TestServiceRejectsOfferWhenSessionWasNotCreated(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -94,7 +96,7 @@ func TestServiceRejectsOfferWhenSessionWasNotCreated(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 
@@ -121,8 +123,8 @@ func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -130,7 +132,7 @@ func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -188,8 +190,8 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -197,7 +199,7 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -255,8 +257,8 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -264,7 +266,7 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -343,8 +345,8 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -352,7 +354,7 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -428,8 +430,8 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -437,7 +439,7 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -502,8 +504,8 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -511,7 +513,7 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	core, observed := observer.New(zap.InfoLevel)
 	svc := newService(rooms, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.New(core))
@@ -593,8 +595,8 @@ func TestServicePersistsRoomMetadataForClientJoin(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -602,7 +604,7 @@ func TestServicePersistsRoomMetadataForClientJoin(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -638,8 +640,8 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -647,7 +649,7 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -715,8 +717,8 @@ func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -724,7 +726,7 @@ func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewServiceWithOptions(rooms, runtime, states, media, provider, ServiceOptions{
 		RealtimeDataChannelLabel: "custom-events",
@@ -767,8 +769,8 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -776,7 +778,7 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -849,8 +851,8 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -858,7 +860,7 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithOptionsLoggerAndPublisher(
@@ -952,8 +954,8 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -961,7 +963,7 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithOptionsLoggerAndPublisher(
@@ -1016,8 +1018,8 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1025,7 +1027,7 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithOptionsLoggerAndPublisher(
@@ -1083,8 +1085,8 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1092,7 +1094,7 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	publisher := &repositoryfakes.FakeConversationEventPublisher{}
 	publisher.PublishReturns(errors.New("publish failed"))
@@ -1152,8 +1154,8 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1161,7 +1163,7 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewServiceWithOptions(rooms, runtime, states, media, provider, ServiceOptions{RealtimeEventHistoryLimit: 2})
 	createSessionForTest(t, svc)
@@ -1217,8 +1219,8 @@ func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1226,7 +1228,7 @@ func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1298,8 +1300,8 @@ func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{}, errors.New("openai unavailable"))
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1307,7 +1309,7 @@ func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1367,8 +1369,8 @@ func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
 	media.ApplyAnswerReturns(nil, errors.New("invalid openai answer"))
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1376,7 +1378,7 @@ func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1417,8 +1419,8 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1426,7 +1428,7 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1482,8 +1484,8 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1491,7 +1493,7 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1546,8 +1548,8 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1555,7 +1557,7 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1613,8 +1615,8 @@ func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1622,7 +1624,7 @@ func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1674,8 +1676,8 @@ func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1683,7 +1685,7 @@ func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1733,8 +1735,8 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1742,7 +1744,7 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1805,8 +1807,8 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1814,7 +1816,7 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -1874,8 +1876,8 @@ func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1883,7 +1885,7 @@ func TestServiceCleansUpIdleRuntimeRooms(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	svcImpl := svc.(*service)
@@ -1957,8 +1959,8 @@ func TestServiceKeepsRecentlyUpdatedRuntimeRooms(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -1966,7 +1968,7 @@ func TestServiceKeepsRecentlyUpdatedRuntimeRooms(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	svcImpl := svc.(*service)
@@ -2001,8 +2003,8 @@ func TestServiceShutdownClosesActiveRuntimeRooms(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -2010,7 +2012,7 @@ func TestServiceShutdownClosesActiveRuntimeRooms(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	svcImpl := svc.(*service)
@@ -2068,8 +2070,8 @@ func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -2077,7 +2079,7 @@ func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -2131,8 +2133,8 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -2140,7 +2142,7 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
@@ -2244,8 +2246,8 @@ func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
 	media.ApplyAnswerReturns(&port.Peer{}, nil)
 	provider := &fakeRealtimeProvider{}
 	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
-	states := &repositoryfakes.FakeMediaSessionStateRepository{}
-	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (entity.MediaSessionState, bool, error) {
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
 		_ = ctx
 		for i := states.SaveCallCount() - 1; i >= 0; i-- {
 			_, state := states.SaveArgsForCall(i)
@@ -2253,7 +2255,7 @@ func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
 				return state, true, nil
 			}
 		}
-		return entity.MediaSessionState{}, false, nil
+		return sessionreadmodel.MediaSessionState{}, false, nil
 	})
 	svc := NewService(rooms, runtime, states, media, provider)
 	createSessionForTest(t, svc)
