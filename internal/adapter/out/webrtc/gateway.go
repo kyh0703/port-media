@@ -3,17 +3,35 @@ package webrtc
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
 )
 
 type Gateway struct {
-	engine *Engine
+	engine  *Engine
+	mu      sync.RWMutex
+	handler port.MediaRuntimeEventHandler
+	offers  map[offerKey]*PeerOffer
+}
+
+type offerKey struct {
+	sessionID     vo.SessionID
+	participantID vo.ParticipantID
 }
 
 func NewGateway(engine *Engine) port.MediaGateway {
-	return &Gateway{engine: engine}
+	return &Gateway{
+		engine: engine,
+		offers: make(map[offerKey]*PeerOffer),
+	}
+}
+
+func (g *Gateway) SubscribeRuntimeEvents(handler port.MediaRuntimeEventHandler) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.handler = handler
 }
 
 func (g *Gateway) AcceptOffer(ctx context.Context, input port.OfferInput) (*port.Peer, error) {
@@ -23,8 +41,8 @@ func (g *Gateway) AcceptOffer(ctx context.Context, input port.OfferInput) (*port
 		Role:                    input.Role,
 		SDP:                     input.SDP,
 		PublishAudio:            input.PublishAudio,
-		OnConnectionStateChange: wrapConnectionStateHandler(input.OnConnectionStateChange),
-		OnMediaTrackStateChange: wrapMediaTrackStateHandler(input.OnMediaTrackStateChange),
+		OnConnectionStateChange: g.handleConnectionStateChange(),
+		OnMediaTrackStateChange: g.handleMediaTrackStateChange(),
 	})
 	if err != nil {
 		return nil, err
@@ -39,20 +57,20 @@ func (g *Gateway) CreateOffer(ctx context.Context, input port.CreateOfferInput) 
 		Role:                    input.Role,
 		DataChannelLabel:        input.DataChannelLabel,
 		InitialDataMessages:     input.InitialDataMessages,
-		OnConnectionStateChange: wrapConnectionStateHandler(input.OnConnectionStateChange),
-		OnMediaTrackStateChange: wrapMediaTrackStateHandler(input.OnMediaTrackStateChange),
-		OnDataChannelMessage:    wrapDataChannelMessageHandler(input.OnDataChannelMessage),
+		OnConnectionStateChange: g.handleConnectionStateChange(),
+		OnMediaTrackStateChange: g.handleMediaTrackStateChange(),
+		OnDataChannelMessage:    g.handleDataChannelMessage(),
 	})
 	if err != nil {
 		return nil, err
 	}
+	g.storeOffer(offer)
 	return &port.PeerOffer{
 		SessionID:        offer.SessionID,
 		ParticipantID:    offer.ParticipantID,
 		Role:             offer.Role,
 		SDPOffer:         offer.SDPOffer,
 		DataChannelLabel: offer.DataChannelLabel,
-		Handle:           offer,
 	}, nil
 }
 
@@ -60,23 +78,55 @@ func (g *Gateway) ApplyAnswer(ctx context.Context, offer *port.PeerOffer, answer
 	if offer == nil {
 		return nil, fmt.Errorf("apply answer: nil offer")
 	}
-	webrtcOffer, ok := offer.Handle.(*PeerOffer)
-	if !ok || webrtcOffer == nil {
-		return nil, fmt.Errorf("apply answer: invalid offer handle")
+	webrtcOffer, ok := g.offer(offer.SessionID, offer.ParticipantID)
+	if !ok {
+		return nil, fmt.Errorf("apply answer: offer not found")
 	}
 	peer, err := g.engine.ApplyAnswer(ctx, webrtcOffer, answerSDP)
 	if err != nil {
 		return nil, err
 	}
+	g.deleteParticipantOffer(offer.SessionID, offer.ParticipantID)
 	return toPortPeer(peer), nil
 }
 
 func (g *Gateway) CloseSession(ctx context.Context, sessionID vo.SessionID) error {
+	g.deleteSessionOffers(sessionID)
 	return g.engine.CloseSession(ctx, sessionID)
 }
 
 func (g *Gateway) CloseParticipant(ctx context.Context, sessionID vo.SessionID, participantID vo.ParticipantID) error {
+	g.deleteParticipantOffer(sessionID, participantID)
 	return g.engine.CloseParticipant(ctx, sessionID, participantID)
+}
+
+func (g *Gateway) storeOffer(offer *PeerOffer) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.offers[offerKey{sessionID: offer.SessionID, participantID: offer.ParticipantID}] = offer
+}
+
+func (g *Gateway) offer(sessionID vo.SessionID, participantID vo.ParticipantID) (*PeerOffer, bool) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	offer, ok := g.offers[offerKey{sessionID: sessionID, participantID: participantID}]
+	return offer, ok
+}
+
+func (g *Gateway) deleteParticipantOffer(sessionID vo.SessionID, participantID vo.ParticipantID) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	delete(g.offers, offerKey{sessionID: sessionID, participantID: participantID})
+}
+
+func (g *Gateway) deleteSessionOffers(sessionID vo.SessionID) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for key := range g.offers {
+		if key.sessionID == sessionID {
+			delete(g.offers, key)
+		}
+	}
 }
 
 func toPortPeer(peer *Peer) *port.Peer {
@@ -91,12 +141,19 @@ func toPortPeer(peer *Peer) *port.Peer {
 	}
 }
 
-func wrapConnectionStateHandler(handler port.ConnectionStateChangeHandler) ConnectionStateChangeHandler {
-	if handler == nil {
-		return nil
-	}
+func (g *Gateway) eventHandler() port.MediaRuntimeEventHandler {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.handler
+}
+
+func (g *Gateway) handleConnectionStateChange() ConnectionStateChangeHandler {
 	return func(change ConnectionStateChange) {
-		handler(port.ConnectionStateChange{
+		handler := g.eventHandler()
+		if handler == nil {
+			return
+		}
+		handler.HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
 			SessionID:     change.SessionID,
 			ParticipantID: change.ParticipantID,
 			Role:          change.Role,
@@ -105,12 +162,13 @@ func wrapConnectionStateHandler(handler port.ConnectionStateChangeHandler) Conne
 	}
 }
 
-func wrapMediaTrackStateHandler(handler port.MediaTrackStateChangeHandler) MediaTrackStateChangeHandler {
-	if handler == nil {
-		return nil
-	}
+func (g *Gateway) handleMediaTrackStateChange() MediaTrackStateChangeHandler {
 	return func(change MediaTrackStateChange) {
-		handler(port.MediaTrackStateChange{
+		handler := g.eventHandler()
+		if handler == nil {
+			return
+		}
+		handler.HandleMediaTrackStateChange(context.Background(), port.MediaTrackStateChange{
 			SessionID:     change.SessionID,
 			ParticipantID: change.ParticipantID,
 			Role:          change.Role,
@@ -120,12 +178,13 @@ func wrapMediaTrackStateHandler(handler port.MediaTrackStateChangeHandler) Media
 	}
 }
 
-func wrapDataChannelMessageHandler(handler port.DataChannelMessageHandler) DataChannelMessageHandler {
-	if handler == nil {
-		return nil
-	}
+func (g *Gateway) handleDataChannelMessage() DataChannelMessageHandler {
 	return func(message DataChannelMessage) {
-		handler(port.DataChannelMessage{
+		handler := g.eventHandler()
+		if handler == nil {
+			return
+		}
+		handler.HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
 			SessionID:     message.SessionID,
 			ParticipantID: message.ParticipantID,
 			Role:          message.Role,

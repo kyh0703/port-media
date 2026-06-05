@@ -22,6 +22,16 @@ type MediaGateway interface {
 	ParticipantCloser
 }
 
+type MediaRuntimeEventSubscriber interface {
+	SubscribeRuntimeEvents(handler MediaRuntimeEventHandler)
+}
+
+type MediaRuntimeEventHandler interface {
+	HandleConnectionStateChange(ctx context.Context, change ConnectionStateChange)
+	HandleMediaTrackStateChange(ctx context.Context, change MediaTrackStateChange)
+	HandleDataChannelMessage(ctx context.Context, message DataChannelMessage)
+}
+
 type AnswerApplier interface {
 	ApplyAnswer(ctx context.Context, offer *PeerOffer, answerSDP string) (*Peer, error)
 }
@@ -35,27 +45,20 @@ type ParticipantCloser interface {
 }
 
 type OfferInput struct {
-	SessionID               vo.SessionID
-	ParticipantID           vo.ParticipantID
-	Role                    vo.ParticipantRole
-	SDP                     string
-	PublishAudio            bool
-	OnConnectionStateChange ConnectionStateChangeHandler
-	OnMediaTrackStateChange MediaTrackStateChangeHandler
+	SessionID     vo.SessionID
+	ParticipantID vo.ParticipantID
+	Role          vo.ParticipantRole
+	SDP           string
+	PublishAudio  bool
 }
 
 type CreateOfferInput struct {
-	SessionID               vo.SessionID
-	ParticipantID           vo.ParticipantID
-	Role                    vo.ParticipantRole
-	DataChannelLabel        string
-	InitialDataMessages     []string
-	OnConnectionStateChange ConnectionStateChangeHandler
-	OnMediaTrackStateChange MediaTrackStateChangeHandler
-	OnDataChannelMessage    DataChannelMessageHandler
+	SessionID           vo.SessionID
+	ParticipantID       vo.ParticipantID
+	Role                vo.ParticipantRole
+	DataChannelLabel    string
+	InitialDataMessages []string
 }
-
-type ConnectionStateChangeHandler func(ConnectionStateChange)
 
 type ConnectionStateChange struct {
 	SessionID     vo.SessionID
@@ -64,8 +67,6 @@ type ConnectionStateChange struct {
 	State         vo.ConnectionState
 }
 
-type MediaTrackStateChangeHandler func(MediaTrackStateChange)
-
 type MediaTrackStateChange struct {
 	SessionID     vo.SessionID
 	ParticipantID vo.ParticipantID
@@ -73,8 +74,6 @@ type MediaTrackStateChange struct {
 	Kind          vo.TrackKind
 	State         vo.TrackState
 }
-
-type DataChannelMessageHandler func(DataChannelMessage)
 
 type DataChannelMessage struct {
 	SessionID     vo.SessionID
@@ -97,5 +96,4 @@ type PeerOffer struct {
 	Role             vo.ParticipantRole
 	SDPOffer         string
 	DataChannelLabel string
-	Handle           any
 }

@@ -124,7 +124,7 @@ func newService(
 		events = noopConversationEventPublisher{}
 	}
 	realtimeEvents := realtimeEventPolicy{}
-	return &service{
+	svc := &service{
 		records:   records,
 		runtime:   runtime,
 		states:    states,
@@ -139,6 +139,10 @@ func newService(
 		eventsIn:  realtimeEvents,
 		eventsOut: conversationEventMapper{realtime: realtimeEvents},
 	}
+	if subscriber, ok := media.(port.MediaRuntimeEventSubscriber); ok {
+		subscriber.SubscribeRuntimeEvents(svc)
+	}
+	return svc
 }
 
 func realtimeControlConfigFromOptions(options ServiceOptions) realtimeControlConfig {
@@ -276,13 +280,11 @@ func (s *service) acceptClientParticipant(
 ) (entity.Participant, *port.Peer, error) {
 	participantID := vo.NewParticipantID()
 	peer, err := s.media.AcceptOffer(ctx, port.OfferInput{
-		SessionID:               sessionID,
-		ParticipantID:           participantID,
-		Role:                    vo.ParticipantRoleClient,
-		SDP:                     sdp,
-		PublishAudio:            publishAudio,
-		OnConnectionStateChange: s.handleConnectionStateChange,
-		OnMediaTrackStateChange: s.handleMediaTrackStateChange,
+		SessionID:     sessionID,
+		ParticipantID: participantID,
+		Role:          vo.ParticipantRoleClient,
+		SDP:           sdp,
+		PublishAudio:  publishAudio,
 	})
 	if err != nil {
 		return entity.Participant{}, nil, err
@@ -353,14 +355,11 @@ func (s *service) lockSession(sessionID vo.SessionID) func() {
 func (s *service) connectOpenAIParticipant(ctx context.Context, sessionID vo.SessionID, now time.Time) (entity.Participant, error) {
 	participantID := vo.NewParticipantID()
 	offer, err := s.media.CreateOffer(ctx, port.CreateOfferInput{
-		SessionID:               sessionID,
-		ParticipantID:           participantID,
-		Role:                    vo.ParticipantRoleOpenAIAgent,
-		DataChannelLabel:        s.realtime.dataChannelLabel,
-		InitialDataMessages:     s.realtime.initialEvents,
-		OnConnectionStateChange: s.handleConnectionStateChange,
-		OnMediaTrackStateChange: s.handleMediaTrackStateChange,
-		OnDataChannelMessage:    s.handleOpenAIDataChannelMessage,
+		SessionID:           sessionID,
+		ParticipantID:       participantID,
+		Role:                vo.ParticipantRoleOpenAIAgent,
+		DataChannelLabel:    s.realtime.dataChannelLabel,
+		InitialDataMessages: s.realtime.initialEvents,
 	})
 	if err != nil {
 		return entity.Participant{}, err
@@ -385,8 +384,7 @@ func (s *service) connectOpenAIParticipant(ctx context.Context, sessionID vo.Ses
 	return participant, nil
 }
 
-func (s *service) handleOpenAIDataChannelMessage(message port.DataChannelMessage) {
-	ctx := context.Background()
+func (s *service) HandleDataChannelMessage(ctx context.Context, message port.DataChannelMessage) {
 	now := s.now().UTC()
 	unlock := s.lockSession(message.SessionID)
 	defer unlock()
@@ -606,8 +604,7 @@ func (s *service) GetHealth(ctx context.Context) error {
 	return nil
 }
 
-func (s *service) handleConnectionStateChange(change port.ConnectionStateChange) {
-	ctx := context.Background()
+func (s *service) HandleConnectionStateChange(ctx context.Context, change port.ConnectionStateChange) {
 	now := s.now().UTC()
 	unlock := s.lockSession(change.SessionID)
 	defer unlock()
@@ -642,8 +639,7 @@ func (s *service) handleConnectionStateChange(change port.ConnectionStateChange)
 	_ = s.states.Save(ctx, s.project.Project(room, room.UserID, now))
 }
 
-func (s *service) handleMediaTrackStateChange(change port.MediaTrackStateChange) {
-	ctx := context.Background()
+func (s *service) HandleMediaTrackStateChange(ctx context.Context, change port.MediaTrackStateChange) {
 	now := s.now().UTC()
 	unlock := s.lockSession(change.SessionID)
 	defer unlock()

@@ -1,6 +1,9 @@
 package session
 
-import "github.com/kyh0703/portfoilo-media/internal/core/usecase"
+import (
+	"github.com/kyh0703/portfoilo-media/internal/core/port"
+	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
+)
 
 var _ usecase.CreateSessionUsecase = (*service)(nil)
 var _ usecase.JoinSessionUsecase = (*service)(nil)
@@ -9,3 +12,4 @@ var _ usecase.EndSessionUsecase = (*service)(nil)
 var _ usecase.GetSessionStatusQuery = (*service)(nil)
 var _ usecase.GetRuntimeStatsQuery = (*service)(nil)
 var _ usecase.GetHealthQuery = (*service)(nil)
+var _ port.MediaRuntimeEventHandler = (*service)(nil)

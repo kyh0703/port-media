@@ -580,7 +580,7 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	}
 
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
-	acceptedInput.OnConnectionStateChange(port.ConnectionStateChange{
+	svc.(*service).HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
 		SessionID:     acceptedInput.SessionID,
 		ParticipantID: acceptedInput.ParticipantID,
 		Role:          acceptedInput.Role,
@@ -596,7 +596,7 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	createdInput.OnConnectionStateChange(port.ConnectionStateChange{
+	svc.(*service).HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
@@ -823,7 +823,7 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	createdInput.OnDataChannelMessage(port.DataChannelMessage{
+	svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
@@ -915,7 +915,7 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	createdInput.OnDataChannelMessage(port.DataChannelMessage{
+	svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
@@ -1018,7 +1018,7 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	createdInput.OnDataChannelMessage(port.DataChannelMessage{
+	svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
@@ -1089,8 +1089,8 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 		Label:         createdInput.DataChannelLabel,
 		Payload:       `{"type":"response.output_text.done","text":"hello"}`,
 	}
-	createdInput.OnDataChannelMessage(message)
-	createdInput.OnDataChannelMessage(message)
+	svc.(*service).HandleDataChannelMessage(context.Background(), message)
+	svc.(*service).HandleDataChannelMessage(context.Background(), message)
 
 	if publisher.PublishCallCount() != 2 {
 		t.Fatalf("published events = %d, want 2", publisher.PublishCallCount())
@@ -1151,7 +1151,7 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	createdInput.OnDataChannelMessage(port.DataChannelMessage{
+	svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
@@ -1209,7 +1209,7 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
 	for _, eventType := range []string{"session.created", "response.created", "response.done"} {
-		createdInput.OnDataChannelMessage(port.DataChannelMessage{
+		svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
 			SessionID:     createdInput.SessionID,
 			ParticipantID: createdInput.ParticipantID,
 			Role:          createdInput.Role,
@@ -1473,7 +1473,7 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 	}
 
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
-	acceptedInput.OnMediaTrackStateChange(port.MediaTrackStateChange{
+	svc.(*service).HandleMediaTrackStateChange(context.Background(), port.MediaTrackStateChange{
 		SessionID:     acceptedInput.SessionID,
 		ParticipantID: acceptedInput.ParticipantID,
 		Role:          acceptedInput.Role,
@@ -1538,7 +1538,7 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 	}
 
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
-	acceptedInput.OnConnectionStateChange(port.ConnectionStateChange{
+	svc.(*service).HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
 		SessionID:     acceptedInput.SessionID,
 		ParticipantID: acceptedInput.ParticipantID,
 		Role:          acceptedInput.Role,
@@ -1602,7 +1602,7 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 	}
 
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
-	acceptedInput.OnMediaTrackStateChange(port.MediaTrackStateChange{
+	svc.(*service).HandleMediaTrackStateChange(context.Background(), port.MediaTrackStateChange{
 		SessionID:     acceptedInput.SessionID,
 		ParticipantID: acceptedInput.ParticipantID,
 		Role:          acceptedInput.Role,
@@ -1669,7 +1669,7 @@ func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	createdInput.OnConnectionStateChange(port.ConnectionStateChange{
+	svc.(*service).HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
@@ -1730,7 +1730,7 @@ func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	createdInput.OnMediaTrackStateChange(port.MediaTrackStateChange{
+	svc.(*service).HandleMediaTrackStateChange(context.Background(), port.MediaTrackStateChange{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
@@ -1789,14 +1789,14 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 	}
 
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
-	acceptedInput.OnConnectionStateChange(port.ConnectionStateChange{
+	svc.(*service).HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
 		SessionID:     acceptedInput.SessionID,
 		ParticipantID: acceptedInput.ParticipantID,
 		Role:          acceptedInput.Role,
 		State:         vo.ConnectionStateConnected,
 	})
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	createdInput.OnConnectionStateChange(port.ConnectionStateChange{
+	svc.(*service).HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
@@ -2194,27 +2194,27 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 		t.Fatalf("JoinSession() error = %v", err)
 	}
 	_, acceptedInput := media.AcceptOfferArgsForCall(0)
-	acceptedInput.OnConnectionStateChange(port.ConnectionStateChange{
+	svc.(*service).HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
 		SessionID:     acceptedInput.SessionID,
 		ParticipantID: acceptedInput.ParticipantID,
 		Role:          acceptedInput.Role,
 		State:         vo.ConnectionStateConnected,
 	})
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	createdInput.OnConnectionStateChange(port.ConnectionStateChange{
+	svc.(*service).HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
 		State:         vo.ConnectionStateConnected,
 	})
-	acceptedInput.OnMediaTrackStateChange(port.MediaTrackStateChange{
+	svc.(*service).HandleMediaTrackStateChange(context.Background(), port.MediaTrackStateChange{
 		SessionID:     acceptedInput.SessionID,
 		ParticipantID: acceptedInput.ParticipantID,
 		Role:          acceptedInput.Role,
 		Kind:          vo.TrackKindAudio,
 		State:         vo.TrackStateActive,
 	})
-	createdInput.OnDataChannelMessage(port.DataChannelMessage{
+	svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
 		SessionID:     createdInput.SessionID,
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
