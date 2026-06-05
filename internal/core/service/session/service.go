@@ -2,10 +2,6 @@ package session
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
-	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -36,16 +32,20 @@ type Service interface {
 }
 
 type service struct {
-	rooms    repository.RoomRepository
-	runtime  repository.RoomRuntimeRepository
-	states   repository.MediaSessionStateRepository
-	media    port.MediaGateway
-	provider port.RealtimeProvider
-	events   repository.ConversationEventPublisher
-	log      *zap.Logger
-	now      func() time.Time
-	locks    sync.Map
-	realtime realtimeControlConfig
+	rooms     repository.RoomRepository
+	runtime   repository.RoomRuntimeRepository
+	states    repository.MediaSessionStateRepository
+	media     port.MediaGateway
+	provider  port.RealtimeProvider
+	events    repository.ConversationEventPublisher
+	log       *zap.Logger
+	now       func() time.Time
+	locks     sync.Map
+	realtime  realtimeControlConfig
+	project   mediaSessionProjector
+	stats     roomStatsQuery
+	eventsIn  realtimeEventPolicy
+	eventsOut conversationEventMapper
 }
 
 type realtimeControlConfig struct {
@@ -116,16 +116,21 @@ func newService(
 	if events == nil {
 		events = noopConversationEventPublisher{}
 	}
+	realtimeEvents := realtimeEventPolicy{}
 	return &service{
-		rooms:    rooms,
-		runtime:  runtime,
-		states:   states,
-		media:    media,
-		provider: provider,
-		events:   events,
-		log:      log,
-		now:      time.Now,
-		realtime: realtime,
+		rooms:     rooms,
+		runtime:   runtime,
+		states:    states,
+		media:     media,
+		provider:  provider,
+		events:    events,
+		log:       log,
+		now:       time.Now,
+		realtime:  realtime,
+		project:   mediaSessionProjector{realtimeEventHistoryLimit: realtime.realtimeEventHistoryLimit},
+		stats:     roomStatsQuery{},
+		eventsIn:  realtimeEvents,
+		eventsOut: conversationEventMapper{realtime: realtimeEvents},
 	}
 }
 
@@ -311,7 +316,7 @@ func (s *service) saveActiveRoomState(ctx context.Context, room entity.Room, use
 	if err := s.rooms.Save(ctx, room); err != nil {
 		return err
 	}
-	if err := s.states.Save(ctx, s.mediaSessionState(room, userID, now)); err != nil {
+	if err := s.states.Save(ctx, s.project.Project(room, userID, now)); err != nil {
 		return err
 	}
 	return nil
@@ -371,7 +376,7 @@ func (s *service) handleOpenAIDataChannelMessage(message port.DataChannelMessage
 	if err != nil || !found {
 		return
 	}
-	eventType := realtimeEventType(message.Payload)
+	eventType := s.eventsIn.Type(message.Payload)
 	room.RecordRealtimeEvent(eventType, now)
 
 	if err := s.runtime.Save(ctx, room); err != nil {
@@ -381,7 +386,7 @@ func (s *service) handleOpenAIDataChannelMessage(message port.DataChannelMessage
 		return
 	}
 	existingState, _, _ := s.states.FindBySessionID(ctx, message.SessionID)
-	_ = s.states.Save(ctx, s.mediaSessionStateWithRealtimeEvent(
+	_ = s.states.Save(ctx, s.project.ProjectWithRealtimeEvent(
 		room,
 		room.UserID,
 		now,
@@ -444,7 +449,7 @@ func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeavePart
 	if err := s.rooms.Save(ctx, room); err != nil {
 		return sessiondto.LeaveParticipantResponse{}, err
 	}
-	if err := s.states.Save(ctx, s.mediaSessionState(room, req.UserID, now)); err != nil {
+	if err := s.states.Save(ctx, s.project.Project(room, req.UserID, now)); err != nil {
 		return sessiondto.LeaveParticipantResponse{}, err
 	}
 
@@ -572,55 +577,7 @@ func (s *service) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsR
 		return sessiondto.RuntimeStatsResponse{}, err
 	}
 
-	stats := sessiondto.RuntimeStatsResponse{
-		Rooms:           len(rooms),
-		Sessions:        len(rooms),
-		ByStatus:        make(map[string]int),
-		ByConnection:    make(map[string]int),
-		ByMedia:         make(map[string]int),
-		ByRole:          make(map[string]int),
-		ByAudioMode:     make(map[string]int),
-		ByRealtimeEvent: make(map[string]int),
-		RoomsDetail:     make([]sessiondto.RuntimeRoomStatDetail, 0, len(rooms)),
-	}
-
-	for _, room := range rooms {
-		connectionState := roomConnectionState(room)
-		mediaState := roomMediaState(room)
-		trackCount := countTracks(room)
-
-		stats.Participants += len(room.Participants)
-		stats.Tracks += trackCount
-		stats.ByStatus[string(room.Status)]++
-		stats.ByConnection[string(connectionState)]++
-		stats.ByMedia[string(mediaState)]++
-		if room.LastRealtimeEventType != "" {
-			stats.ByRealtimeEvent[room.LastRealtimeEventType]++
-		}
-		publishers, listeners := countClientAudioModes(room)
-		for _, participant := range room.Participants {
-			stats.ByRole[string(participant.Role)]++
-			if participant.Role == vo.ParticipantRoleClient {
-				stats.ByAudioMode[participantAudioMode(participant)]++
-			}
-		}
-		stats.RoomsDetail = append(stats.RoomsDetail, sessiondto.RuntimeRoomStatDetail{
-			RoomID:                string(room.ID),
-			SessionID:             string(room.SessionID),
-			ConversationID:        string(room.ConversationID),
-			Status:                string(room.Status),
-			ConnectionState:       string(connectionState),
-			MediaState:            string(mediaState),
-			Participants:          len(room.Participants),
-			Publishers:            publishers,
-			Listeners:             listeners,
-			LastRealtimeEventType: room.LastRealtimeEventType,
-			LastRealtimeEventAt:   formatOptionalTime(room.LastRealtimeEventAt),
-			Tracks:                trackCount,
-		})
-	}
-
-	return stats, nil
+	return s.stats.Build(rooms), nil
 }
 
 func (s *service) GetHealth(ctx context.Context) error {
@@ -661,7 +618,7 @@ func (s *service) handleConnectionStateChange(change port.ConnectionStateChange)
 		)
 		return
 	}
-	_ = s.states.Save(ctx, s.mediaSessionState(room, room.UserID, now))
+	_ = s.states.Save(ctx, s.project.Project(room, room.UserID, now))
 }
 
 func (s *service) handleMediaTrackStateChange(change port.MediaTrackStateChange) {
@@ -699,7 +656,7 @@ func (s *service) handleMediaTrackStateChange(change port.MediaTrackStateChange)
 		)
 		return
 	}
-	_ = s.states.Save(ctx, s.mediaSessionState(room, room.UserID, now))
+	_ = s.states.Save(ctx, s.project.Project(room, room.UserID, now))
 }
 
 func (s *service) failRoom(ctx context.Context, room entity.Room, userID string, now time.Time, reason string, fields ...zap.Field) error {
@@ -710,7 +667,7 @@ func (s *service) failRoom(ctx context.Context, room entity.Room, userID string,
 	if err := s.rooms.Save(ctx, room); err != nil {
 		return err
 	}
-	if err := s.states.Save(ctx, s.mediaSessionState(room, userID, now)); err != nil {
+	if err := s.states.Save(ctx, s.project.Project(room, userID, now)); err != nil {
 		return err
 	}
 	logFields := append([]zap.Field{zap.String("failure_reason", reason)}, fields...)
@@ -733,7 +690,7 @@ func (s *service) closeRoom(ctx context.Context, room entity.Room, userID string
 	if err := s.rooms.Save(ctx, room); err != nil {
 		return err
 	}
-	if err := s.states.Save(ctx, s.mediaSessionState(room, userID, now)); err != nil {
+	if err := s.states.Save(ctx, s.project.Project(room, userID, now)); err != nil {
 		return err
 	}
 	s.logRoomEvent("media_room_closed", room,
@@ -754,132 +711,6 @@ func (s *service) hangupOpenAIParticipants(ctx context.Context, room entity.Room
 	return nil
 }
 
-func (s *service) logParticipantEvent(event string, room entity.Room, participant entity.Participant, fields ...zap.Field) {
-	logFields := append(roomLogFields(room), participantLogFields(participant)...)
-	logFields = append(logFields, fields...)
-	s.log.Info(event, logFields...)
-}
-
-func (s *service) logRoomEvent(event string, room entity.Room, fields ...zap.Field) {
-	logFields := append(roomLogFields(room), fields...)
-	s.log.Info(event, logFields...)
-}
-
-func roomLogFields(room entity.Room) []zap.Field {
-	return []zap.Field{
-		zap.String("session_id", string(room.SessionID)),
-		zap.String("conversation_id", string(room.ConversationID)),
-		zap.String("room_id", string(room.ID)),
-		zap.String("room_status", string(room.Status)),
-	}
-}
-
-func participantLogFields(participant entity.Participant) []zap.Field {
-	return []zap.Field{
-		zap.String("participant_id", string(participant.ID)),
-		zap.String("participant_role", string(participant.Role)),
-		zap.String("connection_state", string(participant.State)),
-	}
-}
-
-func (s *service) mediaSessionState(room entity.Room, userID string, now time.Time) entity.MediaSessionState {
-	return entity.MediaSessionState{
-		SessionID:            room.SessionID,
-		ConversationID:       room.ConversationID,
-		UserID:               coalesceUserID(userID, room.UserID),
-		RoomID:               room.ID,
-		Status:               room.Status,
-		ConnectionState:      roomConnectionState(room),
-		MediaState:           roomMediaState(room),
-		OpenAIProviderCallID: openAIProviderCallID(room),
-		Participants:         len(room.Participants),
-		ParticipantStates:    mediaSessionParticipantStates(room),
-		StartedAt:            room.CreatedAt,
-		UpdatedAt:            now,
-	}
-}
-
-func (s *service) mediaSessionStateWithRealtimeEvent(
-	room entity.Room,
-	userID string,
-	now time.Time,
-	eventType string,
-	recentEvents []entity.RealtimeEvent,
-) entity.MediaSessionState {
-	state := s.mediaSessionState(room, userID, now)
-	state.LastRealtimeEventType = eventType
-	state.LastRealtimeEventAt = now
-	state.RecentRealtimeEvents = appendRealtimeEvent(recentEvents, entity.RealtimeEvent{
-		Type: eventType,
-		At:   now,
-	}, s.realtime.realtimeEventHistoryLimit)
-	return state
-}
-
-func realtimeEventType(payload string) string {
-	eventType, _ := realtimeEventEnvelopeFields(payload)
-	if eventType == "" {
-		return "unknown"
-	}
-	return eventType
-}
-
-func realtimeEventEnvelopeFields(payload string) (string, string) {
-	var event struct {
-		Type    string `json:"type"`
-		EventID string `json:"event_id"`
-	}
-	if err := json.Unmarshal([]byte(payload), &event); err != nil {
-		return "", ""
-	}
-	if strings.TrimSpace(event.Type) == "" {
-		return "", strings.TrimSpace(event.EventID)
-	}
-	return strings.TrimSpace(event.Type), strings.TrimSpace(event.EventID)
-}
-
-func formatOptionalTime(value time.Time) string {
-	if value.IsZero() {
-		return ""
-	}
-	return value.Format(time.RFC3339Nano)
-}
-
-func appendRealtimeEvent(
-	events []entity.RealtimeEvent,
-	event entity.RealtimeEvent,
-	limit int,
-) []entity.RealtimeEvent {
-	if limit <= 0 {
-		return nil
-	}
-	next := append(append([]entity.RealtimeEvent(nil), events...), event)
-	if len(next) <= limit {
-		return next
-	}
-	return next[len(next)-limit:]
-}
-
-func realtimeEventResponses(events []entity.RealtimeEvent) []sessiondto.RealtimeEventResponse {
-	responses := make([]sessiondto.RealtimeEventResponse, 0, len(events))
-	for _, event := range events {
-		responses = append(responses, sessiondto.RealtimeEventResponse{
-			Type: event.Type,
-			At:   formatOptionalTime(event.At),
-		})
-	}
-	return responses
-}
-
-func openAIProviderCallID(room entity.Room) string {
-	for _, participant := range room.Participants {
-		if participant.Role == vo.ParticipantRoleOpenAIAgent {
-			return participant.ProviderCallID
-		}
-	}
-	return ""
-}
-
 func (s *service) publishConversationEvent(
 	ctx context.Context,
 	room entity.Room,
@@ -887,28 +718,11 @@ func (s *service) publishConversationEvent(
 	payload string,
 	occurredAt time.Time,
 ) {
-	if !isPublishableConversationEvent(eventType) {
+	event, ok := s.eventsOut.Map(room, eventType, payload, occurredAt)
+	if !ok {
 		return
 	}
 
-	eventID := realtimeEventID(payload)
-	sanitizedPayload := sanitizeRealtimePayload(payload)
-	providerCallID := openAIProviderCallID(room)
-	if eventID == "" {
-		eventID = fallbackConversationEventID(room.SessionID, providerCallID, eventType, sanitizedPayload)
-	}
-
-	event := entity.ConversationEvent{
-		SchemaVersion:     1,
-		EventID:           eventID,
-		ConversationID:    room.ConversationID,
-		SessionID:         room.SessionID,
-		RoomID:            room.ID,
-		ProviderCallID:    providerCallID,
-		ProviderEventType: eventType,
-		OccurredAt:        occurredAt,
-		Payload:           sanitizedPayload,
-	}
 	if err := s.events.Publish(ctx, event); err != nil {
 		s.log.Warn("media_conversation_event_publish_failed",
 			zap.Error(err),
@@ -921,259 +735,10 @@ func (s *service) publishConversationEvent(
 	}
 }
 
-func realtimeEventID(payload string) string {
-	_, eventID := realtimeEventEnvelopeFields(payload)
-	return eventID
-}
-
-func fallbackConversationEventID(
-	sessionID vo.SessionID,
-	providerCallID string,
-	eventType string,
-	payload string,
-) string {
-	sum := sha256.Sum256([]byte(strings.Join([]string{
-		string(sessionID),
-		providerCallID,
-		eventType,
-		payload,
-	}, "\x00")))
-	return fmt.Sprintf("media-%x", sum[:])
-}
-
-func sanitizeRealtimePayload(payload string) string {
-	var decoded any
-	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
-		return payload
-	}
-	sanitized := sanitizeRealtimeValue(decoded)
-	body, err := json.Marshal(sanitized)
-	if err != nil {
-		return payload
-	}
-	return string(body)
-}
-
-func sanitizeRealtimeValue(value any) any {
-	switch typed := value.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(typed))
-		for key, item := range typed {
-			if isSecretPayloadField(key) {
-				continue
-			}
-			out[key] = sanitizeRealtimeValue(item)
-		}
-		return out
-	case []any:
-		out := make([]any, 0, len(typed))
-		for _, item := range typed {
-			out = append(out, sanitizeRealtimeValue(item))
-		}
-		return out
-	default:
-		return typed
-	}
-}
-
-func isSecretPayloadField(key string) bool {
-	switch strings.ToLower(strings.TrimSpace(key)) {
-	case "api_key", "authorization", "token", "secret", "client_secret":
-		return true
-	default:
-		return false
-	}
-}
-
-func isPublishableConversationEvent(eventType string) bool {
-	_, ok := conversationEventAllowlist[eventType]
-	return ok
-}
-
-var conversationEventAllowlist = map[string]struct{}{
-	"conversation.item.created":                             {},
-	"conversation.item.input_audio_transcription.completed": {},
-	"conversation.item.input_audio_transcription.failed":    {},
-	"response.output_audio_transcript.done":                 {},
-	"response.output_text.done":                             {},
-	"response.function_call_arguments.done":                 {},
-	"response.mcp_call_arguments.done":                      {},
-	"response.mcp_call.completed":                           {},
-	"response.mcp_call.failed":                              {},
-	"mcp_list_tools.completed":                              {},
-	"mcp_list_tools.failed":                                 {},
-	"response.output_item.done":                             {},
-	"error":                                                 {},
-}
-
 type noopConversationEventPublisher struct{}
 
 func (noopConversationEventPublisher) Publish(ctx context.Context, event entity.ConversationEvent) error {
 	_ = ctx
 	_ = event
 	return nil
-}
-
-func coalesceUserID(userID string, fallback string) string {
-	if userID != "" {
-		return userID
-	}
-	return fallback
-}
-
-func isCriticalParticipant(role vo.ParticipantRole) bool {
-	return role == vo.ParticipantRoleOpenAIAgent
-}
-
-func roomConnectionState(room entity.Room) vo.ConnectionState {
-	if room.Status == vo.RoomStatusFailed {
-		return vo.ConnectionStateFailed
-	}
-	if room.Status == vo.RoomStatusClosed {
-		return vo.ConnectionStateClosed
-	}
-	if len(room.Participants) == 0 {
-		return vo.ConnectionStateNew
-	}
-
-	hasConnected := false
-	hasConnecting := false
-	hasDisconnected := false
-	for _, participant := range room.Participants {
-		switch participant.State {
-		case vo.ConnectionStateFailed:
-			if isCriticalParticipant(participant.Role) {
-				return vo.ConnectionStateFailed
-			}
-			hasDisconnected = true
-		case vo.ConnectionStateDisconnected:
-			hasDisconnected = true
-		case vo.ConnectionStateConnected:
-			hasConnected = true
-		case vo.ConnectionStateConnecting, vo.ConnectionStateNew:
-			hasConnecting = true
-		default:
-			hasConnecting = true
-		}
-	}
-	if hasConnected {
-		return vo.ConnectionStateConnected
-	}
-	if hasConnecting {
-		return vo.ConnectionStateConnecting
-	}
-	if hasDisconnected {
-		return vo.ConnectionStateDisconnected
-	}
-	return vo.ConnectionStateNew
-}
-
-func roomMediaState(room entity.Room) vo.TrackState {
-	if room.Status == vo.RoomStatusFailed {
-		return vo.TrackStateFailed
-	}
-	if room.Status == vo.RoomStatusClosed {
-		return vo.TrackStateEnded
-	}
-
-	hasTrack := false
-	hasPending := false
-	hasFailed := false
-	hasEnded := false
-	for _, participant := range room.Participants {
-		for _, track := range participant.Tracks {
-			if track.Kind != vo.TrackKindAudio {
-				continue
-			}
-			hasTrack = true
-			switch track.State {
-			case vo.TrackStateFailed:
-				if isCriticalParticipant(participant.Role) {
-					return vo.TrackStateFailed
-				}
-				hasFailed = true
-			case vo.TrackStateActive:
-				return vo.TrackStateActive
-			case vo.TrackStatePending:
-				hasPending = true
-			case vo.TrackStateEnded:
-				hasEnded = true
-			default:
-				hasPending = true
-			}
-		}
-	}
-	if !hasTrack || hasPending {
-		return vo.TrackStatePending
-	}
-	if hasFailed {
-		return vo.TrackStateFailed
-	}
-	if hasEnded {
-		return vo.TrackStateEnded
-	}
-	return vo.TrackStatePending
-}
-
-func countTracks(room entity.Room) int {
-	var count int
-	for _, participant := range room.Participants {
-		count += len(participant.Tracks)
-	}
-	return count
-}
-
-func mediaSessionParticipantStates(room entity.Room) []entity.MediaSessionParticipantState {
-	states := make([]entity.MediaSessionParticipantState, 0, len(room.Participants))
-	for _, participant := range room.Participants {
-		states = append(states, entity.MediaSessionParticipantState{
-			ID:              participant.ID,
-			Role:            participant.Role,
-			AudioMode:       participantAudioMode(participant),
-			ConnectionState: participant.State,
-			Tracks:          len(participant.Tracks),
-		})
-	}
-	sort.Slice(states, func(i, j int) bool {
-		return states[i].ID < states[j].ID
-	})
-	return states
-}
-
-func participantStateResponses(states []entity.MediaSessionParticipantState) []sessiondto.ParticipantStateResponse {
-	responses := make([]sessiondto.ParticipantStateResponse, 0, len(states))
-	for _, state := range states {
-		responses = append(responses, sessiondto.ParticipantStateResponse{
-			ID:              string(state.ID),
-			Role:            string(state.Role),
-			AudioMode:       state.AudioMode,
-			ConnectionState: string(state.ConnectionState),
-			Tracks:          state.Tracks,
-		})
-	}
-	return responses
-}
-
-func countClientAudioModes(room entity.Room) (publishers int, listeners int) {
-	for _, participant := range room.Participants {
-		if participant.Role != vo.ParticipantRoleClient {
-			continue
-		}
-		if participant.PublishAudio {
-			publishers++
-			continue
-		}
-		listeners++
-	}
-	return publishers, listeners
-}
-
-func participantAudioMode(participant entity.Participant) string {
-	if participant.Role != vo.ParticipantRoleClient {
-		return ""
-	}
-	if participant.PublishAudio {
-		return string(sessiondto.AudioModePublisher)
-	}
-	return string(sessiondto.AudioModeListener)
 }
