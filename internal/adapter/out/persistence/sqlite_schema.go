@@ -11,6 +11,7 @@ import (
 
 var Module = fx.Module(
 	"persistence",
+	fx.Provide(NewDB),
 	fx.Invoke(EnsureSQLiteSchema),
 )
 

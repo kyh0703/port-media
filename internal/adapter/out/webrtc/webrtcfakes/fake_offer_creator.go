@@ -5,7 +5,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kyh0703/portfoilo-media/internal/pkg/webrtc"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/out/webrtc"
 )
 
 type FakeOfferCreator struct {

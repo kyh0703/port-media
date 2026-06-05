@@ -11,7 +11,7 @@ import (
 
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
-	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
+	coreport "github.com/kyh0703/portfoilo-media/internal/core/port"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
 	"go.uber.org/zap"
 )
@@ -26,11 +26,11 @@ type fakeSessionUsecase struct {
 }
 
 type fakeMediaTokenVerifier struct {
-	token auth.MediaToken
+	token coreport.MediaToken
 	err   error
 }
 
-func (v fakeMediaTokenVerifier) Verify(ctx context.Context, raw string) (auth.MediaToken, error) {
+func (v fakeMediaTokenVerifier) Verify(ctx context.Context, raw string) (coreport.MediaToken, error) {
 	_ = ctx
 	_ = raw
 	return v.token, v.err
@@ -100,7 +100,7 @@ func TestSessionsHandlerGetsSessionStatusWithMediaToken(t *testing.T) {
 		},
 	}
 	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
-		token: auth.MediaToken{
+		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
 			UserID:         "user-1",
@@ -137,7 +137,7 @@ func (f *fakeSessionUsecase) GetHealth(ctx context.Context) error {
 func TestSessionsHandlerEndsSessionWithMediaToken(t *testing.T) {
 	usecase := &fakeSessionUsecase{}
 	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
-		token: auth.MediaToken{
+		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
 			UserID:         "user-1",
@@ -178,7 +178,7 @@ func TestSessionsHandlerEndsSessionWithMediaToken(t *testing.T) {
 func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
 	usecase := &fakeSessionUsecase{}
 	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
-		token: auth.MediaToken{
+		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
 			UserID:         "user-1",
@@ -243,7 +243,7 @@ func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
 func TestSessionsHandlerAcceptsListenerJoinMode(t *testing.T) {
 	usecase := &fakeSessionUsecase{}
 	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
-		token: auth.MediaToken{
+		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
 			UserID:         "user-1",
@@ -283,7 +283,7 @@ func TestSessionsHandlerAcceptsListenerJoinMode(t *testing.T) {
 func TestSessionsHandlerLeavesParticipantWithMediaToken(t *testing.T) {
 	usecase := &fakeSessionUsecase{}
 	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
-		token: auth.MediaToken{
+		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
 			UserID:         "user-1",
@@ -343,7 +343,7 @@ func TestSessionsHandlerLeavesParticipantWithMediaToken(t *testing.T) {
 
 func TestSessionsHandlerRejectsJoinWithoutMediaToken(t *testing.T) {
 	usecase := &fakeSessionUsecase{}
-	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{err: auth.ErrMissingMediaToken})
+	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{err: coreport.ErrMissingMediaToken})
 
 	app := newTestApp()
 	for _, route := range handler.Table() {
@@ -391,7 +391,7 @@ func TestSessionsHandlerRejectsJoinWithoutMediaToken(t *testing.T) {
 func TestSessionsHandlerRejectsSessionMismatch(t *testing.T) {
 	usecase := &fakeSessionUsecase{}
 	handler := NewSessionsHandler(usecase, fakeMediaTokenVerifier{
-		token: auth.MediaToken{
+		token: coreport.MediaToken{
 			SessionID:      "other-session",
 			ConversationID: "conversation-1",
 			UserID:         "user-1",

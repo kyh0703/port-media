@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	coreport "github.com/kyh0703/portfoilo-media/internal/core/port"
 )
 
 type fakeMediaTokenStore struct {
-	token MediaToken
+	token coreport.MediaToken
 	err   error
 }
 
-func (s fakeMediaTokenStore) Get(ctx context.Context, token string) (MediaToken, error) {
+func (s fakeMediaTokenStore) Get(ctx context.Context, token string) (coreport.MediaToken, error) {
 	_ = ctx
 	_ = token
 	return s.token, s.err
@@ -19,7 +21,7 @@ func (s fakeMediaTokenStore) Get(ctx context.Context, token string) (MediaToken,
 
 func TestMediaTokenVerifierReturnsRedisBackedClaims(t *testing.T) {
 	verifier := NewMediaTokenVerifier(fakeMediaTokenStore{
-		token: MediaToken{
+		token: coreport.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
 			UserID:         "user-1",
@@ -43,9 +45,9 @@ func TestMediaTokenVerifierReturnsRedisBackedClaims(t *testing.T) {
 }
 
 func TestMediaTokenVerifierRejectsExpiredOrMissingToken(t *testing.T) {
-	verifier := NewMediaTokenVerifier(fakeMediaTokenStore{err: ErrMediaTokenNotFound})
+	verifier := NewMediaTokenVerifier(fakeMediaTokenStore{err: coreport.ErrMediaTokenNotFound})
 
-	if _, err := verifier.Verify(context.Background(), "expired-token"); !errors.Is(err, ErrInvalidMediaToken) {
+	if _, err := verifier.Verify(context.Background(), "expired-token"); !errors.Is(err, coreport.ErrInvalidMediaToken) {
 		t.Fatalf("Verify() error = %v, want ErrInvalidMediaToken", err)
 	}
 }

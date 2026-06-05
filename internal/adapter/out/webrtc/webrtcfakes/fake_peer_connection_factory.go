@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	"github.com/kyh0703/portfoilo-media/internal/pkg/webrtc"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/out/webrtc"
 )
 
 type FakePeerConnectionFactory struct {

@@ -1,4 +1,4 @@
-package db
+package persistence
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 )
 
 func TestConfigureSQLiteEnablesWALForFileDatabase(t *testing.T) {
-	sqldb := newTestSQLDB(t, "file:"+filepath.Join(t.TempDir(), "media.db")+"?cache=shared")
+	sqldb := newTestSQLDBForConnection(t, "file:"+filepath.Join(t.TempDir(), "media.db")+"?cache=shared")
 	defer func() {
 		_ = sqldb.Close()
 	}()
@@ -38,7 +38,7 @@ func TestConfigureSQLiteEnablesWALForFileDatabase(t *testing.T) {
 	}
 }
 
-func newTestSQLDB(t *testing.T, dsn string) *sql.DB {
+func newTestSQLDBForConnection(t *testing.T, dsn string) *sql.DB {
 	t.Helper()
 
 	sqldb, err := sql.Open(sqliteshim.ShimName, dsn)

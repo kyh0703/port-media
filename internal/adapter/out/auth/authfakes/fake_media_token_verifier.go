@@ -5,7 +5,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
+	auth "github.com/kyh0703/portfoilo-media/internal/core/port"
 )
 
 type FakeMediaTokenVerifier struct {

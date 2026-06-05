@@ -8,18 +8,18 @@ import (
 	"strings"
 
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	coreport "github.com/kyh0703/portfoilo-media/internal/core/port"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
-	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/response"
 )
 
 type SessionsHandler struct {
 	session       usecase.SessionUsecase
-	tokenVerifier auth.MediaTokenVerifier
+	tokenVerifier coreport.MediaTokenVerifier
 }
 
-func NewSessionsHandler(session usecase.SessionUsecase, tokenVerifier auth.MediaTokenVerifier) *SessionsHandler {
+func NewSessionsHandler(session usecase.SessionUsecase, tokenVerifier coreport.MediaTokenVerifier) *SessionsHandler {
 	return &SessionsHandler{session: session, tokenVerifier: tokenVerifier}
 }
 
@@ -143,13 +143,13 @@ func (h *SessionsHandler) End(w http.ResponseWriter, r *http.Request) error {
 	return response.WriteJSON(w, http.StatusOK, response.OK(res))
 }
 
-func (h *SessionsHandler) verifySessionToken(r *http.Request) (auth.MediaToken, error) {
+func (h *SessionsHandler) verifySessionToken(r *http.Request) (coreport.MediaToken, error) {
 	claims, err := h.tokenVerifier.Verify(r.Context(), readBearerToken(r.Header.Get("Authorization")))
 	if err != nil {
-		return auth.MediaToken{}, exception.New(exception.CodeUnauthorized, "invalid media token", http.StatusUnauthorized)
+		return coreport.MediaToken{}, exception.New(exception.CodeUnauthorized, "invalid media token", http.StatusUnauthorized)
 	}
 	if claims.SessionID != r.PathValue("sessionId") {
-		return auth.MediaToken{}, exception.New(exception.CodeUnauthorized, "media token session mismatch", http.StatusUnauthorized)
+		return coreport.MediaToken{}, exception.New(exception.CodeUnauthorized, "media token session mismatch", http.StatusUnauthorized)
 	}
 
 	return claims, nil

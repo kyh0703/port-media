@@ -12,14 +12,13 @@ import (
 
 	"github.com/kyh0703/portfoilo-media/configs"
 	corerepo "github.com/kyh0703/portfoilo-media/internal/adapter/out/repository"
+	rtc "github.com/kyh0703/portfoilo-media/internal/adapter/out/webrtc"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository/repositoryfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
 	sessionservice "github.com/kyh0703/portfoilo-media/internal/core/service/session"
-	"github.com/kyh0703/portfoilo-media/internal/pkg/auth"
-	rtc "github.com/kyh0703/portfoilo-media/internal/pkg/webrtc"
 	pionwebrtc "github.com/pion/webrtc/v4"
 )
 
@@ -46,7 +45,7 @@ func TestJoinEndpointSmokeWithPionClient(t *testing.T) {
 		t.Fatalf("CreateSession() error = %v", err)
 	}
 	handler := NewSessionsHandler(svc, fakeMediaTokenVerifier{
-		token: auth.MediaToken{
+		token: port.MediaToken{
 			SessionID:      "session-1",
 			ConversationID: "conversation-1",
 			UserID:         "user-1",
