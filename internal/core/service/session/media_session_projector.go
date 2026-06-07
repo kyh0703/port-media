@@ -7,15 +7,15 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
-	sessionreadmodel "github.com/kyh0703/portfoilo-media/internal/core/readmodel/session"
+	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
 )
 
 type mediaSessionProjector struct {
 	realtimeEventHistoryLimit int
 }
 
-func (p mediaSessionProjector) Project(room entity.Room, userID string, now time.Time) sessionreadmodel.MediaSessionState {
-	return sessionreadmodel.MediaSessionState{
+func (p mediaSessionProjector) Project(room entity.Room, userID string, now time.Time) sessionquery.MediaSessionState {
+	return sessionquery.MediaSessionState{
 		SessionID:            room.SessionID,
 		ConversationID:       room.ConversationID,
 		UserID:               coalesceUserID(userID, room.UserID),
@@ -36,12 +36,12 @@ func (p mediaSessionProjector) ProjectWithRealtimeEvent(
 	userID string,
 	now time.Time,
 	eventType string,
-	recentEvents []sessionreadmodel.RealtimeEvent,
-) sessionreadmodel.MediaSessionState {
+	recentEvents []sessionquery.RealtimeEvent,
+) sessionquery.MediaSessionState {
 	state := p.Project(room, userID, now)
 	state.LastRealtimeEventType = eventType
 	state.LastRealtimeEventAt = now
-	state.RecentRealtimeEvents = appendRealtimeEvent(recentEvents, sessionreadmodel.RealtimeEvent{
+	state.RecentRealtimeEvents = appendRealtimeEvent(recentEvents, sessionquery.RealtimeEvent{
 		Type: eventType,
 		At:   now,
 	}, p.realtimeEventHistoryLimit)
@@ -153,10 +153,10 @@ func countTracks(room entity.Room) int {
 	return count
 }
 
-func mediaSessionParticipantStates(room entity.Room) []sessionreadmodel.MediaSessionParticipantState {
-	states := make([]sessionreadmodel.MediaSessionParticipantState, 0, room.ParticipantCount())
+func mediaSessionParticipantStates(room entity.Room) []sessionquery.MediaSessionParticipantState {
+	states := make([]sessionquery.MediaSessionParticipantState, 0, room.ParticipantCount())
 	for _, participant := range room.Participants() {
-		states = append(states, sessionreadmodel.MediaSessionParticipantState{
+		states = append(states, sessionquery.MediaSessionParticipantState{
 			ID:              participant.ID,
 			Role:            participant.Role,
 			AudioMode:       participantAudioMode(participant),
@@ -170,7 +170,7 @@ func mediaSessionParticipantStates(room entity.Room) []sessionreadmodel.MediaSes
 	return states
 }
 
-func participantStateResults(states []sessionreadmodel.MediaSessionParticipantState) []sessiondto.ParticipantStateResult {
+func participantStateResults(states []sessionquery.MediaSessionParticipantState) []sessiondto.ParticipantStateResult {
 	results := make([]sessiondto.ParticipantStateResult, 0, len(states))
 	for _, state := range states {
 		results = append(results, sessiondto.ParticipantStateResult{
@@ -184,7 +184,7 @@ func participantStateResults(states []sessionreadmodel.MediaSessionParticipantSt
 	return results
 }
 
-func realtimeEventResults(events []sessionreadmodel.RealtimeEvent) []sessiondto.RealtimeEventResult {
+func realtimeEventResults(events []sessionquery.RealtimeEvent) []sessiondto.RealtimeEventResult {
 	results := make([]sessiondto.RealtimeEventResult, 0, len(events))
 	for _, event := range events {
 		results = append(results, sessiondto.RealtimeEventResult{

@@ -9,7 +9,7 @@ import (
 
 	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	sessionreadmodel "github.com/kyh0703/portfoilo-media/internal/core/readmodel/session"
+	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -20,14 +20,14 @@ type RedisMediaSessionStateRepository struct {
 	ttl    time.Duration
 }
 
-func NewRedisMediaSessionStateRepository(client *redis.Client, cfg *configs.Config) sessionreadmodel.MediaSessionStateRepository {
+func NewRedisMediaSessionStateRepository(client *redis.Client, cfg *configs.Config) sessionquery.MediaSessionStateRepository {
 	return &RedisMediaSessionStateRepository{
 		client: client,
 		ttl:    cfg.Realtime.RoomIdleTimeout,
 	}
 }
 
-func (r *RedisMediaSessionStateRepository) Save(ctx context.Context, state sessionreadmodel.MediaSessionState) error {
+func (r *RedisMediaSessionStateRepository) Save(ctx context.Context, state sessionquery.MediaSessionState) error {
 	body, err := json.Marshal(mediaSessionStatePayload{
 		SessionID:             string(state.SessionID),
 		ConversationID:        string(state.ConversationID),
@@ -55,21 +55,21 @@ func (r *RedisMediaSessionStateRepository) Save(ctx context.Context, state sessi
 	return nil
 }
 
-func (r *RedisMediaSessionStateRepository) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
+func (r *RedisMediaSessionStateRepository) FindBySessionID(ctx context.Context, sessionID vo.SessionID) (sessionquery.MediaSessionState, bool, error) {
 	raw, err := r.client.Get(ctx, mediaSessionStateKey(sessionID)).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return sessionreadmodel.MediaSessionState{}, false, nil
+			return sessionquery.MediaSessionState{}, false, nil
 		}
-		return sessionreadmodel.MediaSessionState{}, false, fmt.Errorf("find media session state %s: %w", sessionID, err)
+		return sessionquery.MediaSessionState{}, false, fmt.Errorf("find media session state %s: %w", sessionID, err)
 	}
 
 	var payload mediaSessionStatePayload
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return sessionreadmodel.MediaSessionState{}, false, fmt.Errorf("decode media session state %s: %w", sessionID, err)
+		return sessionquery.MediaSessionState{}, false, fmt.Errorf("decode media session state %s: %w", sessionID, err)
 	}
 
-	return sessionreadmodel.MediaSessionState{
+	return sessionquery.MediaSessionState{
 		SessionID:             vo.SessionID(payload.SessionID),
 		ConversationID:        vo.ConversationID(payload.ConversationID),
 		UserID:                payload.UserID,
@@ -130,7 +130,7 @@ type mediaSessionParticipantState struct {
 	Tracks          int    `json:"tracks"`
 }
 
-func toMediaSessionParticipantPayloads(states []sessionreadmodel.MediaSessionParticipantState) []mediaSessionParticipantState {
+func toMediaSessionParticipantPayloads(states []sessionquery.MediaSessionParticipantState) []mediaSessionParticipantState {
 	payloads := make([]mediaSessionParticipantState, 0, len(states))
 	for _, state := range states {
 		payloads = append(payloads, mediaSessionParticipantState{
@@ -144,10 +144,10 @@ func toMediaSessionParticipantPayloads(states []sessionreadmodel.MediaSessionPar
 	return payloads
 }
 
-func toMediaSessionParticipantStates(payloads []mediaSessionParticipantState) []sessionreadmodel.MediaSessionParticipantState {
-	states := make([]sessionreadmodel.MediaSessionParticipantState, 0, len(payloads))
+func toMediaSessionParticipantStates(payloads []mediaSessionParticipantState) []sessionquery.MediaSessionParticipantState {
+	states := make([]sessionquery.MediaSessionParticipantState, 0, len(payloads))
 	for _, payload := range payloads {
-		states = append(states, sessionreadmodel.MediaSessionParticipantState{
+		states = append(states, sessionquery.MediaSessionParticipantState{
 			ID:              vo.ParticipantID(payload.ID),
 			Role:            vo.ParticipantRole(payload.Role),
 			AudioMode:       payload.AudioMode,
@@ -158,7 +158,7 @@ func toMediaSessionParticipantStates(payloads []mediaSessionParticipantState) []
 	return states
 }
 
-func toRealtimeEventPayloads(events []sessionreadmodel.RealtimeEvent) []realtimeEventPayload {
+func toRealtimeEventPayloads(events []sessionquery.RealtimeEvent) []realtimeEventPayload {
 	payloads := make([]realtimeEventPayload, 0, len(events))
 	for _, event := range events {
 		payloads = append(payloads, realtimeEventPayload{
@@ -169,10 +169,10 @@ func toRealtimeEventPayloads(events []sessionreadmodel.RealtimeEvent) []realtime
 	return payloads
 }
 
-func toRealtimeEvents(payloads []realtimeEventPayload) []sessionreadmodel.RealtimeEvent {
-	events := make([]sessionreadmodel.RealtimeEvent, 0, len(payloads))
+func toRealtimeEvents(payloads []realtimeEventPayload) []sessionquery.RealtimeEvent {
+	events := make([]sessionquery.RealtimeEvent, 0, len(payloads))
 	for _, payload := range payloads {
-		events = append(events, sessionreadmodel.RealtimeEvent{
+		events = append(events, sessionquery.RealtimeEvent{
 			Type: payload.Type,
 			At:   payload.At,
 		})

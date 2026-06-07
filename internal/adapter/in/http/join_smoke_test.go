@@ -18,8 +18,8 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
-	sessionreadmodel "github.com/kyh0703/portfoilo-media/internal/core/readmodel/session"
-	"github.com/kyh0703/portfoilo-media/internal/core/readmodel/session/sessionfakes"
+	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
+	"github.com/kyh0703/portfoilo-media/internal/core/query/session/sessionfakes"
 	sessionservice "github.com/kyh0703/portfoilo-media/internal/core/service/session"
 	pionwebrtc "github.com/pion/webrtc/v4"
 )
@@ -247,10 +247,10 @@ func newSmokeMediaSessionRecordRepository() *repositoryfakes.FakeMediaSessionRec
 
 func newSmokeMediaSessionStateRepository() *sessionfakes.FakeMediaSessionStateRepository {
 	var mu sync.RWMutex
-	states := make(map[vo.SessionID]sessionreadmodel.MediaSessionState)
+	states := make(map[vo.SessionID]sessionquery.MediaSessionState)
 	repo := &sessionfakes.FakeMediaSessionStateRepository{}
 
-	repo.SaveCalls(func(ctx context.Context, state sessionreadmodel.MediaSessionState) error {
+	repo.SaveCalls(func(ctx context.Context, state sessionquery.MediaSessionState) error {
 		_ = ctx
 		mu.Lock()
 		defer mu.Unlock()
@@ -258,7 +258,7 @@ func newSmokeMediaSessionStateRepository() *sessionfakes.FakeMediaSessionStateRe
 		states[state.SessionID] = state
 		return nil
 	})
-	repo.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
+	repo.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionquery.MediaSessionState, bool, error) {
 		_ = ctx
 		mu.RLock()
 		defer mu.RUnlock()

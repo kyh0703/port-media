@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	"github.com/kyh0703/portfoilo-media/internal/core/readmodel/session"
+	"github.com/kyh0703/portfoilo-media/internal/core/query/session"
 )
 
 type FakeMediaSessionStateRepository struct {

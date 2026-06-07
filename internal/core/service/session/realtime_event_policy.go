@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	sessionreadmodel "github.com/kyh0703/portfoilo-media/internal/core/readmodel/session"
+	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
 )
 
 type realtimeEventPolicy struct{}
@@ -70,14 +70,14 @@ func formatOptionalTime(value time.Time) string {
 }
 
 func appendRealtimeEvent(
-	events []sessionreadmodel.RealtimeEvent,
-	event sessionreadmodel.RealtimeEvent,
+	events []sessionquery.RealtimeEvent,
+	event sessionquery.RealtimeEvent,
 	limit int,
-) []sessionreadmodel.RealtimeEvent {
+) []sessionquery.RealtimeEvent {
 	if limit <= 0 {
 		return nil
 	}
-	next := append(append([]sessionreadmodel.RealtimeEvent(nil), events...), event)
+	next := append(append([]sessionquery.RealtimeEvent(nil), events...), event)
 	if len(next) <= limit {
 		return next
 	}
