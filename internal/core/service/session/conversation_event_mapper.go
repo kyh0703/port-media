@@ -42,7 +42,7 @@ func (m conversationEventMapper) Map(
 }
 
 func openAIProviderCallID(room entity.Room) string {
-	for _, participant := range room.Participants {
+	for _, participant := range room.Participants() {
 		if participant.Role == vo.ParticipantRoleOpenAIAgent {
 			return participant.ProviderCallID
 		}

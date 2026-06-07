@@ -22,7 +22,7 @@ func (r *MemoryRoomRuntimeRepository) Save(ctx context.Context, room entity.Room
 	_ = ctx
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.rooms[room.ID] = room
+	r.rooms[room.ID] = room.Clone()
 	return nil
 }
 
@@ -33,7 +33,7 @@ func (r *MemoryRoomRuntimeRepository) FindBySessionID(ctx context.Context, sessi
 
 	for _, room := range r.rooms {
 		if room.SessionID == sessionID {
-			return room, true, nil
+			return room.Clone(), true, nil
 		}
 	}
 
@@ -47,7 +47,7 @@ func (r *MemoryRoomRuntimeRepository) List(ctx context.Context) ([]entity.Room, 
 
 	rooms := make([]entity.Room, 0, len(r.rooms))
 	for _, room := range r.rooms {
-		rooms = append(rooms, room)
+		rooms = append(rooms, room.Clone())
 	}
 
 	return rooms, nil

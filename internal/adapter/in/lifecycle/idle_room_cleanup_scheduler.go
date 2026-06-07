@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/configs"
-	sessionservice "github.com/kyh0703/portfoilo-media/internal/core/service/session"
+	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
 type IdleRoomCleanupScheduler struct {
-	svc      sessionservice.Service
+	svc      usecase.RoomMaintenanceUsecase
 	log      *zap.Logger
 	timeout  time.Duration
 	interval time.Duration
@@ -21,7 +21,7 @@ type IdleRoomCleanupScheduler struct {
 
 func NewIdleRoomCleanupScheduler(
 	cfg *configs.Config,
-	svc sessionservice.Service,
+	svc usecase.RoomMaintenanceUsecase,
 	log *zap.Logger,
 ) *IdleRoomCleanupScheduler {
 	if log == nil {

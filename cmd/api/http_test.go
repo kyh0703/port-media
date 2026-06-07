@@ -10,7 +10,15 @@ import (
 	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/in/lifecycle"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/out/auth"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/out/openai"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/out/persistence"
+	"github.com/kyh0703/portfoilo-media/internal/adapter/out/repository"
+	rtc "github.com/kyh0703/portfoilo-media/internal/adapter/out/webrtc"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	pkg "github.com/kyh0703/portfoilo-media/internal/pkg"
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
@@ -47,10 +55,10 @@ func (f appFakeSessionUsecases) EndSession(ctx context.Context, req sessiondto.E
 	return sessiondto.EndSessionResponse{}, nil
 }
 
-func (f appFakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error) {
+func (f appFakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResult, bool, error) {
 	_ = ctx
 	_ = req
-	return sessiondto.GetSessionStatusResponse{}, false, nil
+	return sessiondto.GetSessionStatusResult{}, false, nil
 }
 
 func (f appFakeSessionUsecases) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
@@ -133,6 +141,24 @@ func TestNewHTTPHandlerHandlesCORSPreflightForJoin(t *testing.T) {
 	}
 	if got := res.Header.Get("Access-Control-Allow-Headers"); got == "" {
 		t.Fatal("Access-Control-Allow-Headers is empty")
+	}
+}
+
+func TestApplicationDependencyGraphValidates(t *testing.T) {
+	if err := fx.ValidateApp(
+		configs.Module,
+		pkg.Module,
+		auth.Module,
+		openai.Module,
+		rtc.Module,
+		persistence.Module,
+		repository.Module,
+		lifecycle.Module,
+		middleware.Module,
+		handler.Module,
+		Module,
+	); err != nil {
+		t.Fatalf("fx graph validation failed: %v", err)
 	}
 }
 

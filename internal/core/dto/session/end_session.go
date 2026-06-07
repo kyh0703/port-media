@@ -7,7 +7,7 @@ type EndSessionRequest struct {
 }
 
 type EndSessionResponse struct {
-	SessionID string `json:"session_id"`
-	RoomID    string `json:"room_id"`
-	Status    string `json:"status"`
+	SessionID string
+	RoomID    string
+	Status    string
 }

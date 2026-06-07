@@ -24,7 +24,7 @@ func (p mediaSessionProjector) Project(room entity.Room, userID string, now time
 		ConnectionState:      roomConnectionState(room),
 		MediaState:           roomMediaState(room),
 		OpenAIProviderCallID: openAIProviderCallID(room),
-		Participants:         len(room.Participants),
+		Participants:         room.ParticipantCount(),
 		ParticipantStates:    mediaSessionParticipantStates(room),
 		StartedAt:            room.CreatedAt,
 		UpdatedAt:            now,
@@ -62,14 +62,14 @@ func roomConnectionState(room entity.Room) vo.ConnectionState {
 	if room.Status == vo.RoomStatusClosed {
 		return vo.ConnectionStateClosed
 	}
-	if len(room.Participants) == 0 {
+	if room.ParticipantCount() == 0 {
 		return vo.ConnectionStateNew
 	}
 
 	hasConnected := false
 	hasConnecting := false
 	hasDisconnected := false
-	for _, participant := range room.Participants {
+	for _, participant := range room.Participants() {
 		switch participant.State {
 		case vo.ConnectionStateFailed:
 			if isCriticalParticipant(participant.Role) {
@@ -110,7 +110,7 @@ func roomMediaState(room entity.Room) vo.TrackState {
 	hasPending := false
 	hasFailed := false
 	hasEnded := false
-	for _, participant := range room.Participants {
+	for _, participant := range room.Participants() {
 		for _, track := range participant.Tracks {
 			if track.Kind != vo.TrackKindAudio {
 				continue
@@ -147,15 +147,15 @@ func roomMediaState(room entity.Room) vo.TrackState {
 
 func countTracks(room entity.Room) int {
 	var count int
-	for _, participant := range room.Participants {
+	for _, participant := range room.Participants() {
 		count += len(participant.Tracks)
 	}
 	return count
 }
 
 func mediaSessionParticipantStates(room entity.Room) []sessionreadmodel.MediaSessionParticipantState {
-	states := make([]sessionreadmodel.MediaSessionParticipantState, 0, len(room.Participants))
-	for _, participant := range room.Participants {
+	states := make([]sessionreadmodel.MediaSessionParticipantState, 0, room.ParticipantCount())
+	for _, participant := range room.Participants() {
 		states = append(states, sessionreadmodel.MediaSessionParticipantState{
 			ID:              participant.ID,
 			Role:            participant.Role,
@@ -170,10 +170,10 @@ func mediaSessionParticipantStates(room entity.Room) []sessionreadmodel.MediaSes
 	return states
 }
 
-func participantStateResponses(states []sessionreadmodel.MediaSessionParticipantState) []sessiondto.ParticipantStateResponse {
-	responses := make([]sessiondto.ParticipantStateResponse, 0, len(states))
+func participantStateResults(states []sessionreadmodel.MediaSessionParticipantState) []sessiondto.ParticipantStateResult {
+	results := make([]sessiondto.ParticipantStateResult, 0, len(states))
 	for _, state := range states {
-		responses = append(responses, sessiondto.ParticipantStateResponse{
+		results = append(results, sessiondto.ParticipantStateResult{
 			ID:              string(state.ID),
 			Role:            string(state.Role),
 			AudioMode:       state.AudioMode,
@@ -181,22 +181,22 @@ func participantStateResponses(states []sessionreadmodel.MediaSessionParticipant
 			Tracks:          state.Tracks,
 		})
 	}
-	return responses
+	return results
 }
 
-func realtimeEventResponses(events []sessionreadmodel.RealtimeEvent) []sessiondto.RealtimeEventResponse {
-	responses := make([]sessiondto.RealtimeEventResponse, 0, len(events))
+func realtimeEventResults(events []sessionreadmodel.RealtimeEvent) []sessiondto.RealtimeEventResult {
+	results := make([]sessiondto.RealtimeEventResult, 0, len(events))
 	for _, event := range events {
-		responses = append(responses, sessiondto.RealtimeEventResponse{
+		results = append(results, sessiondto.RealtimeEventResult{
 			Type: event.Type,
-			At:   formatOptionalTime(event.At),
+			At:   event.At,
 		})
 	}
-	return responses
+	return results
 }
 
 func countClientAudioModes(room entity.Room) (publishers int, listeners int) {
-	for _, participant := range room.Participants {
+	for _, participant := range room.Participants() {
 		if participant.Role != vo.ParticipantRoleClient {
 			continue
 		}

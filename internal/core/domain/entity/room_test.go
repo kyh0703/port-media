@@ -51,3 +51,27 @@ func TestRoomRejectsDuplicateOpenAIAgent(t *testing.T) {
 		t.Fatalf("AttachOpenAIAgent() error = %v, want %v", err, ErrOpenAIAgentAlreadyJoined)
 	}
 }
+
+func TestRoomParticipantsReturnsSnapshot(t *testing.T) {
+	now := time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
+	room := NewRoom(vo.RoomID("room-1"), vo.SessionID("session-1"), vo.ConversationID("conversation-1"), now)
+	client := NewParticipant(vo.ParticipantID("client-1"), vo.ParticipantRoleClient, now)
+	client.AddTrack(NewTrack(vo.TrackID("track-1"), vo.TrackKindAudio, now), now)
+	if err := room.JoinClient(client, now); err != nil {
+		t.Fatalf("JoinClient() error = %v", err)
+	}
+
+	participants := room.Participants()
+	clientSnapshot := participants[vo.ParticipantID("client-1")]
+	clientSnapshot.Tracks[vo.TrackID("track-2")] = NewTrack(vo.TrackID("track-2"), vo.TrackKindAudio, now)
+	participants[vo.ParticipantID("client-1")] = clientSnapshot
+	delete(participants, vo.ParticipantID("client-1"))
+
+	participant, found := room.Participant(vo.ParticipantID("client-1"))
+	if !found {
+		t.Fatal("participant missing after mutating snapshot")
+	}
+	if _, found := participant.Tracks[vo.TrackID("track-2")]; found {
+		t.Fatal("snapshot track mutation changed room participant")
+	}
+}

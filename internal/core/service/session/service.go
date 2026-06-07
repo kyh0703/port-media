@@ -27,9 +27,8 @@ type Service interface {
 	usecase.EndSessionUsecase
 	usecase.GetSessionStatusQuery
 	usecase.GetRuntimeStatsQuery
+	usecase.RoomMaintenanceUsecase
 	usecase.GetHealthQuery
-	CleanupIdleRooms(ctx context.Context, idleTimeout time.Duration) (int, error)
-	ShutdownActiveRooms(ctx context.Context) (int, error)
 }
 
 type service struct {
@@ -139,9 +138,6 @@ func newService(
 		eventsIn:  realtimeEvents,
 		eventsOut: conversationEventMapper{realtime: realtimeEvents},
 	}
-	if subscriber, ok := media.(port.MediaRuntimeEventSubscriber); ok {
-		subscriber.SubscribeRuntimeEvents(svc)
-	}
 	return svc
 }
 
@@ -229,14 +225,15 @@ func (s *service) JoinSession(ctx context.Context, req sessiondto.JoinSessionCom
 	}
 
 	if err := s.saveActiveRoomState(ctx, room, req.UserID, now); err != nil {
+		_ = s.failRoom(ctx, room, req.UserID, now, "join_state_persist_failed")
 		return sessiondto.JoinSessionResult{}, err
 	}
 
 	s.logParticipantEvent("media_participant_joined", room, participant,
 		zap.String("audio_mode", participantAudioMode(participant)),
-		zap.Int("participants", len(room.Participants)),
+		zap.Int("participants", room.ParticipantCount()),
 	)
-	for _, joined := range room.Participants {
+	for _, joined := range room.Participants() {
 		if joined.Role == vo.ParticipantRoleOpenAIAgent {
 			s.logParticipantEvent("media_participant_ready", room, joined,
 				zap.String("provider_call_id", joined.ProviderCallID),
@@ -384,41 +381,6 @@ func (s *service) connectOpenAIParticipant(ctx context.Context, sessionID vo.Ses
 	return participant, nil
 }
 
-func (s *service) HandleDataChannelMessage(ctx context.Context, message port.DataChannelMessage) {
-	now := s.now().UTC()
-	unlock := s.lockSession(message.SessionID)
-	defer unlock()
-
-	room, found, err := s.runtime.FindBySessionID(ctx, message.SessionID)
-	if err != nil || !found {
-		return
-	}
-	eventType := s.eventsIn.Type(message.Payload)
-	room.RecordRealtimeEvent(eventType, now)
-
-	if err := s.runtime.Save(ctx, room); err != nil {
-		return
-	}
-	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
-		return
-	}
-	existingState, _, _ := s.states.FindBySessionID(ctx, message.SessionID)
-	_ = s.states.Save(ctx, s.project.ProjectWithRealtimeEvent(
-		room,
-		room.UserID,
-		now,
-		eventType,
-		existingState.RecentRealtimeEvents,
-	))
-	s.publishConversationEvent(ctx, room, eventType, message.Payload, now)
-	s.logRoomEvent("media_realtime_event_recorded", room,
-		zap.String("participant_id", string(message.ParticipantID)),
-		zap.String("participant_role", string(message.Role)),
-		zap.String("data_channel_label", message.Label),
-		zap.String("realtime_event_type", eventType),
-	)
-}
-
 func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
 	now := s.now().UTC()
 	sessionID := vo.SessionID(req.SessionID)
@@ -472,7 +434,7 @@ func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeavePart
 
 	s.logParticipantEvent("media_participant_left", room, participant,
 		zap.String("audio_mode", participantAudioMode(participant)),
-		zap.Int("participants", len(room.Participants)),
+		zap.Int("participants", room.ParticipantCount()),
 	)
 
 	return sessiondto.LeaveParticipantResponse{
@@ -514,242 +476,6 @@ func (s *service) EndSession(ctx context.Context, req sessiondto.EndSessionReque
 		RoomID:    string(room.ID),
 		Status:    string(vo.RoomStatusClosed),
 	}, nil
-}
-
-func (s *service) CleanupIdleRooms(ctx context.Context, idleTimeout time.Duration) (int, error) {
-	if idleTimeout <= 0 {
-		return 0, nil
-	}
-
-	now := s.now().UTC()
-	rooms, err := s.runtime.List(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	var cleaned int
-	for _, room := range rooms {
-		if room.Status == vo.RoomStatusClosed || room.Status == vo.RoomStatusFailed {
-			continue
-		}
-		if now.Sub(room.UpdatedAt) < idleTimeout {
-			continue
-		}
-		if err := s.closeRoom(ctx, room, room.UserID, now, "idle_timeout"); err != nil {
-			return cleaned, err
-		}
-		cleaned++
-	}
-
-	return cleaned, nil
-}
-
-func (s *service) ShutdownActiveRooms(ctx context.Context) (int, error) {
-	now := s.now().UTC()
-	rooms, err := s.runtime.List(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	var cleaned int
-	for _, room := range rooms {
-		if room.Status == vo.RoomStatusClosed || room.Status == vo.RoomStatusFailed {
-			continue
-		}
-		if err := s.closeRoom(ctx, room, room.UserID, now, "shutdown"); err != nil {
-			return cleaned, err
-		}
-		cleaned++
-	}
-
-	return cleaned, nil
-}
-
-func (s *service) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error) {
-	state, found, err := s.states.FindBySessionID(ctx, vo.SessionID(req.SessionID))
-	if err != nil || !found {
-		return sessiondto.GetSessionStatusResponse{}, found, err
-	}
-
-	return sessiondto.GetSessionStatusResponse{
-		SessionID:             string(state.SessionID),
-		ConversationID:        string(state.ConversationID),
-		UserID:                state.UserID,
-		RoomID:                string(state.RoomID),
-		Status:                string(state.Status),
-		ConnectionState:       string(state.ConnectionState),
-		MediaState:            string(state.MediaState),
-		OpenAIProviderCallID:  state.OpenAIProviderCallID,
-		Participants:          state.Participants,
-		ParticipantStates:     participantStateResponses(state.ParticipantStates),
-		LastRealtimeEventType: state.LastRealtimeEventType,
-		LastRealtimeEventAt:   formatOptionalTime(state.LastRealtimeEventAt),
-		RecentRealtimeEvents:  realtimeEventResponses(state.RecentRealtimeEvents),
-		StartedAt:             state.StartedAt.Format(time.RFC3339Nano),
-		LastActiveAt:          state.UpdatedAt.Format(time.RFC3339Nano),
-	}, true, nil
-}
-
-func (s *service) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
-	rooms, err := s.runtime.List(ctx)
-	if err != nil {
-		return sessiondto.RuntimeStatsResponse{}, err
-	}
-
-	return s.stats.Build(rooms), nil
-}
-
-func (s *service) GetHealth(ctx context.Context) error {
-	_ = ctx
-	return nil
-}
-
-func (s *service) HandleConnectionStateChange(ctx context.Context, change port.ConnectionStateChange) {
-	now := s.now().UTC()
-	unlock := s.lockSession(change.SessionID)
-	defer unlock()
-
-	room, found, err := s.runtime.FindBySessionID(ctx, change.SessionID)
-	if err != nil || !found {
-		return
-	}
-	if !room.UpdateParticipantState(change.ParticipantID, change.State, now) {
-		return
-	}
-
-	if err := s.runtime.Save(ctx, room); err != nil {
-		return
-	}
-	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
-		return
-	}
-	s.logRoomEvent("media_participant_connection_state_changed", room,
-		zap.String("participant_id", string(change.ParticipantID)),
-		zap.String("participant_role", string(change.Role)),
-		zap.String("connection_state", string(change.State)),
-	)
-	if change.State == vo.ConnectionStateFailed && isCriticalParticipant(change.Role) {
-		_ = s.failRoom(ctx, room, room.UserID, now, "critical_participant_connection_failed",
-			zap.String("participant_id", string(change.ParticipantID)),
-			zap.String("participant_role", string(change.Role)),
-			zap.String("connection_state", string(change.State)),
-		)
-		return
-	}
-	_ = s.states.Save(ctx, s.project.Project(room, room.UserID, now))
-}
-
-func (s *service) HandleMediaTrackStateChange(ctx context.Context, change port.MediaTrackStateChange) {
-	now := s.now().UTC()
-	unlock := s.lockSession(change.SessionID)
-	defer unlock()
-
-	room, found, err := s.runtime.FindBySessionID(ctx, change.SessionID)
-	if err != nil || !found {
-		return
-	}
-	if !room.UpdateParticipantTrackState(change.ParticipantID, change.Kind, change.State, now) {
-		return
-	}
-
-	if err := s.runtime.Save(ctx, room); err != nil {
-		return
-	}
-	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
-		return
-	}
-	s.logRoomEvent("media_track_state_changed", room,
-		zap.String("participant_id", string(change.ParticipantID)),
-		zap.String("participant_role", string(change.Role)),
-		zap.String("track_type", string(change.Kind)),
-		zap.String("media_state", string(change.State)),
-	)
-	if change.State == vo.TrackStateFailed && isCriticalParticipant(change.Role) {
-		_ = s.failRoom(ctx, room, room.UserID, now, "critical_participant_track_failed",
-			zap.String("participant_id", string(change.ParticipantID)),
-			zap.String("participant_role", string(change.Role)),
-			zap.String("track_type", string(change.Kind)),
-			zap.String("media_state", string(change.State)),
-		)
-		return
-	}
-	_ = s.states.Save(ctx, s.project.Project(room, room.UserID, now))
-}
-
-func (s *service) failRoom(ctx context.Context, room entity.Room, userID string, now time.Time, reason string, fields ...zap.Field) error {
-	room.Fail(now)
-	_ = s.hangupOpenAIParticipants(ctx, room)
-	_ = s.media.CloseSession(ctx, room.SessionID)
-	_ = s.runtime.Delete(ctx, room.ID)
-	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
-		return err
-	}
-	if err := s.states.Save(ctx, s.project.Project(room, userID, now)); err != nil {
-		return err
-	}
-	logFields := append([]zap.Field{zap.String("failure_reason", reason)}, fields...)
-	s.logRoomEvent("media_room_failed", room, logFields...)
-	return nil
-}
-
-func (s *service) closeRoom(ctx context.Context, room entity.Room, userID string, now time.Time, reason string) error {
-	if err := s.hangupOpenAIParticipants(ctx, room); err != nil {
-		return err
-	}
-	if err := s.media.CloseSession(ctx, room.SessionID); err != nil {
-		return err
-	}
-
-	room.Close(now)
-	if err := s.runtime.Delete(ctx, room.ID); err != nil {
-		return err
-	}
-	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
-		return err
-	}
-	if err := s.states.Save(ctx, s.project.Project(room, userID, now)); err != nil {
-		return err
-	}
-	s.logRoomEvent("media_room_closed", room,
-		zap.String("close_reason", reason),
-		zap.Int("participants", len(room.Participants)),
-	)
-	return nil
-}
-
-func (s *service) hangupOpenAIParticipants(ctx context.Context, room entity.Room) error {
-	for _, participant := range room.Participants {
-		if participant.Role == vo.ParticipantRoleOpenAIAgent && participant.ProviderCallID != "" {
-			if err := s.provider.HangupCall(ctx, participant.ProviderCallID); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (s *service) publishConversationEvent(
-	ctx context.Context,
-	room entity.Room,
-	eventType string,
-	payload string,
-	occurredAt time.Time,
-) {
-	event, ok := s.eventsOut.Map(room, eventType, payload, occurredAt)
-	if !ok {
-		return
-	}
-
-	if err := s.events.Publish(ctx, event); err != nil {
-		s.log.Warn("media_conversation_event_publish_failed",
-			zap.Error(err),
-			zap.String("session_id", string(event.SessionID)),
-			zap.String("conversation_id", string(event.ConversationID)),
-			zap.String("room_id", string(event.RoomID)),
-			zap.String("provider_call_id", event.ProviderCallID),
-			zap.String("provider_event_type", event.ProviderEventType),
-		)
-	}
 }
 
 type noopConversationEventPublisher struct{}

@@ -26,7 +26,7 @@ func (roomStatsQuery) Build(rooms []entity.Room) sessiondto.RuntimeStatsResponse
 		mediaState := roomMediaState(room)
 		trackCount := countTracks(room)
 
-		stats.Participants += len(room.Participants)
+		stats.Participants += room.ParticipantCount()
 		stats.Tracks += trackCount
 		stats.ByStatus[string(room.Status)]++
 		stats.ByConnection[string(connectionState)]++
@@ -35,7 +35,7 @@ func (roomStatsQuery) Build(rooms []entity.Room) sessiondto.RuntimeStatsResponse
 			stats.ByRealtimeEvent[room.LastRealtimeEventType]++
 		}
 		publishers, listeners := countClientAudioModes(room)
-		for _, participant := range room.Participants {
+		for _, participant := range room.Participants() {
 			stats.ByRole[string(participant.Role)]++
 			if participant.Role == vo.ParticipantRoleClient {
 				stats.ByAudioMode[participantAudioMode(participant)]++
@@ -48,7 +48,7 @@ func (roomStatsQuery) Build(rooms []entity.Room) sessiondto.RuntimeStatsResponse
 			Status:                string(room.Status),
 			ConnectionState:       string(connectionState),
 			MediaState:            string(mediaState),
-			Participants:          len(room.Participants),
+			Participants:          room.ParticipantCount(),
 			Publishers:            publishers,
 			Listeners:             listeners,
 			LastRealtimeEventType: room.LastRealtimeEventType,

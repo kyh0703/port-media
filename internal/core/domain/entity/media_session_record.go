@@ -39,7 +39,7 @@ func (r MediaSessionRecord) RuntimeRoom() Room {
 		ConversationID:        r.ConversationID,
 		UserID:                r.UserID,
 		Status:                r.Status,
-		Participants:          make(map[vo.ParticipantID]Participant),
+		participants:          make(map[vo.ParticipantID]Participant),
 		LastRealtimeEventType: r.LastRealtimeEventType,
 		LastRealtimeEventAt:   r.LastRealtimeEventAt,
 		CreatedAt:             r.CreatedAt,

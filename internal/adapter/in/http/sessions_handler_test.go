@@ -20,7 +20,7 @@ type fakeSessionUsecases struct {
 	offerReq sessiondto.JoinSessionCommand
 	leaveReq sessiondto.LeaveParticipantRequest
 	endReq   sessiondto.EndSessionRequest
-	status   sessiondto.GetSessionStatusResponse
+	status   sessiondto.GetSessionStatusResult
 	found    bool
 	offerErr error
 }
@@ -72,7 +72,7 @@ func (f *fakeSessionUsecases) EndSession(ctx context.Context, req sessiondto.End
 	}, nil
 }
 
-func (f *fakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error) {
+func (f *fakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResult, bool, error) {
 	_ = ctx
 	if f.status.SessionID == "" {
 		f.status.SessionID = req.SessionID
@@ -99,7 +99,7 @@ func newFakeSessionsHandler(session *fakeSessionUsecases, tokenVerifier coreport
 func TestSessionsHandlerGetsSessionStatusWithMediaToken(t *testing.T) {
 	usecase := &fakeSessionUsecases{
 		found: true,
-		status: sessiondto.GetSessionStatusResponse{
+		status: sessiondto.GetSessionStatusResult{
 			SessionID:       "session-1",
 			ConversationID:  "conversation-1",
 			UserID:          "user-1",
@@ -322,9 +322,9 @@ func TestSessionsHandlerLeavesParticipantWithMediaToken(t *testing.T) {
 		t.Fatalf("status = %d, want %d body=%s", res.StatusCode, http.StatusOK, string(body))
 	}
 	var body struct {
-		StatusCode int                                 `json:"statusCode"`
-		Message    string                              `json:"message"`
-		Data       sessiondto.LeaveParticipantResponse `json:"data"`
+		StatusCode int                      `json:"statusCode"`
+		Message    string                   `json:"message"`
+		Data       leaveParticipantResponse `json:"data"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 		t.Fatalf("Decode() error = %v", err)

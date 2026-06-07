@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"time"
 
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 )
@@ -36,12 +37,18 @@ type EndSessionUsecase interface {
 
 //counterfeiter:generate . GetSessionStatusQuery
 type GetSessionStatusQuery interface {
-	GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error)
+	GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResult, bool, error)
 }
 
 //counterfeiter:generate . GetRuntimeStatsQuery
 type GetRuntimeStatsQuery interface {
 	GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error)
+}
+
+//counterfeiter:generate . RoomMaintenanceUsecase
+type RoomMaintenanceUsecase interface {
+	CleanupIdleRooms(ctx context.Context, idleTimeout time.Duration) (int, error)
+	ShutdownActiveRooms(ctx context.Context) (int, error)
 }
 
 //counterfeiter:generate . GetHealthQuery

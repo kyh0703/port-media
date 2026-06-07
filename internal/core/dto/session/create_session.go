@@ -1,13 +1,13 @@
 package session
 
 type CreateSessionRequest struct {
-	SessionID      string `json:"session_id"`
-	ConversationID string `json:"conversation_id"`
+	SessionID      string
+	ConversationID string
 }
 
 type CreateSessionResponse struct {
-	SessionID      string `json:"session_id"`
-	ConversationID string `json:"conversation_id"`
-	RoomID         string `json:"room_id"`
-	Status         string `json:"status"`
+	SessionID      string
+	ConversationID string
+	RoomID         string
+	Status         string
 }

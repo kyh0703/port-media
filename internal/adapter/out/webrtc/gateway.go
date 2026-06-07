@@ -11,6 +11,7 @@ import (
 
 type Gateway struct {
 	engine  *Engine
+	ctx     context.Context
 	mu      sync.RWMutex
 	handler port.MediaRuntimeEventHandler
 	offers  map[offerKey]*PeerOffer
@@ -21,9 +22,17 @@ type offerKey struct {
 	participantID vo.ParticipantID
 }
 
-func NewGateway(engine *Engine) port.MediaGateway {
+func NewGateway(engine *Engine) *Gateway {
+	return NewGatewayWithEventContext(engine, context.Background())
+}
+
+func NewGatewayWithEventContext(engine *Engine, eventContext context.Context) *Gateway {
+	if eventContext == nil {
+		eventContext = context.Background()
+	}
 	return &Gateway{
 		engine: engine,
+		ctx:    eventContext,
 		offers: make(map[offerKey]*PeerOffer),
 	}
 }
@@ -147,13 +156,20 @@ func (g *Gateway) eventHandler() port.MediaRuntimeEventHandler {
 	return g.handler
 }
 
+func (g *Gateway) eventContext() context.Context {
+	if g.ctx == nil {
+		return context.Background()
+	}
+	return g.ctx
+}
+
 func (g *Gateway) handleConnectionStateChange() ConnectionStateChangeHandler {
 	return func(change ConnectionStateChange) {
 		handler := g.eventHandler()
 		if handler == nil {
 			return
 		}
-		handler.HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
+		handler.HandleConnectionStateChange(g.eventContext(), port.ConnectionStateChange{
 			SessionID:     change.SessionID,
 			ParticipantID: change.ParticipantID,
 			Role:          change.Role,
@@ -168,7 +184,7 @@ func (g *Gateway) handleMediaTrackStateChange() MediaTrackStateChangeHandler {
 		if handler == nil {
 			return
 		}
-		handler.HandleMediaTrackStateChange(context.Background(), port.MediaTrackStateChange{
+		handler.HandleMediaTrackStateChange(g.eventContext(), port.MediaTrackStateChange{
 			SessionID:     change.SessionID,
 			ParticipantID: change.ParticipantID,
 			Role:          change.Role,
@@ -184,7 +200,7 @@ func (g *Gateway) handleDataChannelMessage() DataChannelMessageHandler {
 		if handler == nil {
 			return
 		}
-		handler.HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
+		handler.HandleDataChannelMessage(g.eventContext(), port.DataChannelMessage{
 			SessionID:     message.SessionID,
 			ParticipantID: message.ParticipantID,
 			Role:          message.Role,

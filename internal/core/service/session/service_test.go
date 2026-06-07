@@ -186,11 +186,11 @@ func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 	if room.Status != vo.RoomStatusActive {
 		t.Fatalf("room status = %q, want %q", room.Status, vo.RoomStatusActive)
 	}
-	if len(room.Participants) != 2 {
-		t.Fatalf("participants len = %d, want 2", len(room.Participants))
+	if room.ParticipantCount() != 2 {
+		t.Fatalf("participants len = %d, want 2", room.ParticipantCount())
 	}
 
-	participant, ok := room.Participants[vo.ParticipantID(res.ParticipantID)]
+	participant, ok := room.Participants()[vo.ParticipantID(res.ParticipantID)]
 	if !ok {
 		t.Fatalf("participant %q not found in room", res.ParticipantID)
 	}
@@ -267,7 +267,7 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 		t.Fatal("room not found")
 	}
 	var publishers int
-	for _, participant := range room.Participants {
+	for _, participant := range room.Participants() {
 		if participant.Role == vo.ParticipantRoleClient && participant.PublishAudio {
 			publishers++
 		}
@@ -343,12 +343,12 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 	if !found {
 		t.Fatal("room not found")
 	}
-	if len(room.Participants) != 3 {
-		t.Fatalf("participants len = %d, want 3", len(room.Participants))
+	if room.ParticipantCount() != 3 {
+		t.Fatalf("participants len = %d, want 3", room.ParticipantCount())
 	}
 
 	var clients, publishers int
-	for _, participant := range room.Participants {
+	for _, participant := range room.Participants() {
 		if participant.Role != vo.ParticipantRoleClient {
 			continue
 		}
@@ -432,10 +432,10 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 	if !found {
 		t.Fatal("room not found")
 	}
-	if len(room.Participants) != 1 {
-		t.Fatalf("participants len = %d, want 1", len(room.Participants))
+	if room.ParticipantCount() != 1 {
+		t.Fatalf("participants len = %d, want 1", room.ParticipantCount())
 	}
-	for _, participant := range room.Participants {
+	for _, participant := range room.Participants() {
 		if participant.Role != vo.ParticipantRoleOpenAIAgent {
 			t.Fatalf("remaining role = %q, want %q", participant.Role, vo.ParticipantRoleOpenAIAgent)
 		}
@@ -615,6 +615,48 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	}
 }
 
+func TestServiceLogsRuntimeEventStateSaveFailures(t *testing.T) {
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
+	media := &fakeMediaGateway{}
+	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&port.Peer{}, nil)
+	provider := &fakeRealtimeProvider{}
+	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.SaveReturnsOnCall(1, errors.New("state store unavailable"))
+	observed, logs := observer.New(zap.InfoLevel)
+	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.New(observed))
+	createSessionForTest(t, svc)
+
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err != nil {
+		t.Fatalf("JoinSession() error = %v", err)
+	}
+
+	_, acceptedInput := media.AcceptOfferArgsForCall(0)
+	svc.(*service).HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
+		SessionID:     acceptedInput.SessionID,
+		ParticipantID: acceptedInput.ParticipantID,
+		Role:          acceptedInput.Role,
+		State:         vo.ConnectionStateConnected,
+	})
+
+	entries := logs.FilterMessage("media_session_state_save_failed").All()
+	if len(entries) != 1 {
+		t.Fatalf("state save failure logs = %d, want 1", len(entries))
+	}
+	if entries[0].ContextMap()["operation"] != "connection_state_change" {
+		t.Fatalf("operation = %v, want connection_state_change", entries[0].ContextMap()["operation"])
+	}
+}
+
 func TestServicePersistsRoomMetadataForClientJoin(t *testing.T) {
 	records := newMemoryMediaSessionRecordRepositoryForTest()
 	runtime := newMemoryRoomRuntimeRepositoryForTest()
@@ -718,7 +760,7 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 	}
 
 	var foundAgent bool
-	for _, participant := range room.Participants {
+	for _, participant := range room.Participants() {
 		if participant.Role == vo.ParticipantRoleOpenAIAgent {
 			foundAgent = true
 			if participant.State != vo.ConnectionStateConnecting {
@@ -860,8 +902,8 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	if status.LastRealtimeEventType != "response.done" {
 		t.Fatalf("status LastRealtimeEventType = %q, want response.done", status.LastRealtimeEventType)
 	}
-	if status.LastRealtimeEventAt == "" {
-		t.Fatal("status LastRealtimeEventAt is empty")
+	if status.LastRealtimeEventAt.IsZero() {
+		t.Fatal("status LastRealtimeEventAt is zero")
 	}
 	if len(status.RecentRealtimeEvents) != 1 {
 		t.Fatalf("status RecentRealtimeEvents len = %d, want 1", len(status.RecentRealtimeEvents))
@@ -1389,6 +1431,60 @@ func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 	}
 }
 
+func TestServiceCleansUpJoinResourcesWhenActiveStateSaveFails(t *testing.T) {
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
+	media := &fakeMediaGateway{}
+	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&port.Peer{}, nil)
+	provider := &fakeRealtimeProvider{}
+	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.SaveReturns(errors.New("state store unavailable"))
+	svc := NewService(records, runtime, states, media, provider)
+	createSessionForTest(t, svc)
+
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err == nil {
+		t.Fatal("JoinSession() error = nil, want state save error")
+	}
+
+	_, closedSession := media.CloseSessionArgsForCall(0)
+	if media.CloseSessionCallCount() != 1 || closedSession != vo.SessionID("session-1") {
+		t.Fatalf("CloseSession calls = %#v, want session-1", media.closeSessionArgs)
+	}
+	_, hangupProviderCallID := provider.HangupCallArgsForCall(0)
+	if provider.HangupCallCallCount() != 1 || hangupProviderCallID != "rtc_123" {
+		t.Fatalf("hangup calls = %#v, want [rtc_123]", provider.Invocations())
+	}
+	if _, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1")); err != nil || found {
+		t.Fatalf("runtime found=%v err=%v, want not found", found, err)
+	}
+	record, found, err := records.FindBySessionID(context.Background(), vo.SessionID("session-1"))
+	if err != nil {
+		t.Fatalf("FindBySessionID() error = %v", err)
+	}
+	if !found {
+		t.Fatal("metadata record not found")
+	}
+	if record.Status != vo.RoomStatusFailed {
+		t.Fatalf("record status = %q, want %q", record.Status, vo.RoomStatusFailed)
+	}
+	if states.SaveCallCount() != 2 {
+		t.Fatalf("state saves = %d, want active attempt and failed cleanup attempt", states.SaveCallCount())
+	}
+	_, failedState := states.SaveArgsForCall(1)
+	if failedState.Status != vo.RoomStatusFailed {
+		t.Fatalf("cleanup state status = %q, want %q", failedState.Status, vo.RoomStatusFailed)
+	}
+}
+
 func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
 	records := newMemoryMediaSessionRecordRepositoryForTest()
 	runtime := newMemoryRoomRuntimeRepositoryForTest()
@@ -1496,7 +1592,7 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 	if !found {
 		t.Fatal("runtime room not found")
 	}
-	participant := room.Participants[acceptedInput.ParticipantID]
+	participant := room.Participants()[acceptedInput.ParticipantID]
 	for _, track := range participant.Tracks {
 		if track.Kind == vo.TrackKindAudio && track.State != vo.TrackStateActive {
 			t.Fatalf("audio track state = %q, want %q", track.State, vo.TrackStateActive)
@@ -1562,7 +1658,7 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 	if state.ConnectionState == vo.ConnectionStateFailed {
 		t.Fatalf("ConnectionState = %q, want non-failed", state.ConnectionState)
 	}
-	participant := room.Participants[acceptedInput.ParticipantID]
+	participant := room.Participants()[acceptedInput.ParticipantID]
 	if participant.State != vo.ConnectionStateFailed {
 		t.Fatalf("client participant state = %q, want failed", participant.State)
 	}
@@ -1627,7 +1723,7 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 	if state.MediaState == vo.TrackStateFailed {
 		t.Fatalf("MediaState = %q, want non-failed", state.MediaState)
 	}
-	participant := room.Participants[acceptedInput.ParticipantID]
+	participant := room.Participants()[acceptedInput.ParticipantID]
 	for _, track := range participant.Tracks {
 		if track.Kind == vo.TrackKindAudio && track.State != vo.TrackStateFailed {
 			t.Fatalf("client audio track state = %q, want failed", track.State)
@@ -1821,7 +1917,7 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 	if !found {
 		t.Fatal("runtime room not found")
 	}
-	participant := room.Participants[acceptedInput.ParticipantID]
+	participant := room.Participants()[acceptedInput.ParticipantID]
 	if participant.State != vo.ConnectionStateConnected {
 		t.Fatalf("participant state = %q, want %q", participant.State, vo.ConnectionStateConnected)
 	}
@@ -1893,6 +1989,68 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 	}
 	if record.Status != vo.RoomStatusClosed {
 		t.Fatalf("record status = %q, want %q", record.Status, vo.RoomStatusClosed)
+	}
+}
+
+func TestServiceStoresClosedStateWhenCleanupFailsDuringEndSession(t *testing.T) {
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
+	media := &fakeMediaGateway{}
+	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&port.Peer{}, nil)
+	provider := &fakeRealtimeProvider{}
+	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	provider.HangupCallReturns(errors.New("provider hangup unavailable"))
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionreadmodel.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return sessionreadmodel.MediaSessionState{}, false, nil
+	})
+	svc := NewService(records, runtime, states, media, provider)
+	createSessionForTest(t, svc)
+
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err != nil {
+		t.Fatalf("JoinSession() error = %v", err)
+	}
+
+	_, err = svc.EndSession(context.Background(), sessiondto.EndSessionRequest{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+	})
+	if err == nil {
+		t.Fatal("EndSession() error = nil, want cleanup error")
+	}
+
+	record, found, err := records.FindBySessionID(context.Background(), vo.SessionID("session-1"))
+	if err != nil {
+		t.Fatalf("FindBySessionID() error = %v", err)
+	}
+	if !found {
+		t.Fatal("metadata record not found")
+	}
+	if record.Status != vo.RoomStatusClosed {
+		t.Fatalf("record status = %q, want %q", record.Status, vo.RoomStatusClosed)
+	}
+	_, state := states.SaveArgsForCall(states.SaveCallCount() - 1)
+	if state.Status != vo.RoomStatusClosed {
+		t.Fatalf("state status = %q, want %q", state.Status, vo.RoomStatusClosed)
+	}
+	if _, found, err := runtime.FindBySessionID(context.Background(), vo.SessionID("session-1")); err != nil || found {
+		t.Fatalf("runtime found=%v err=%v, want not found", found, err)
 	}
 }
 
@@ -2322,8 +2480,8 @@ func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
 	if status.Status != string(vo.RoomStatusActive) {
 		t.Fatalf("Status = %q, want %q", status.Status, vo.RoomStatusActive)
 	}
-	if status.LastActiveAt == "" {
-		t.Fatal("LastActiveAt is empty")
+	if status.LastActiveAt.IsZero() {
+		t.Fatal("LastActiveAt is zero")
 	}
 	if len(status.ParticipantStates) != 2 {
 		t.Fatalf("ParticipantStates len = %d, want 2", len(status.ParticipantStates))
@@ -2368,6 +2526,9 @@ type fakeMediaGateway struct {
 	closeSessionArgs []struct {
 		ctx       context.Context
 		sessionID vo.SessionID
+	}
+	closeSessionReturns struct {
+		err error
 	}
 	closeParticipantArgs []struct {
 		ctx           context.Context
@@ -2440,7 +2601,11 @@ func (f *fakeMediaGateway) CloseSession(ctx context.Context, sessionID vo.Sessio
 		ctx       context.Context
 		sessionID vo.SessionID
 	}{ctx: ctx, sessionID: sessionID})
-	return nil
+	return f.closeSessionReturns.err
+}
+
+func (f *fakeMediaGateway) CloseSessionReturns(err error) {
+	f.closeSessionReturns.err = err
 }
 
 func (f *fakeMediaGateway) CloseSessionCallCount() int {
@@ -2479,6 +2644,9 @@ type fakeRealtimeProvider struct {
 		ctx            context.Context
 		providerCallID string
 	}
+	hangupCallReturns struct {
+		err error
+	}
 }
 
 func (f *fakeRealtimeProvider) CreateCall(ctx context.Context, input port.CreateCallInput) (port.CreateCallResult, error) {
@@ -2508,7 +2676,11 @@ func (f *fakeRealtimeProvider) HangupCall(ctx context.Context, providerCallID st
 		ctx            context.Context
 		providerCallID string
 	}{ctx: ctx, providerCallID: providerCallID})
-	return nil
+	return f.hangupCallReturns.err
+}
+
+func (f *fakeRealtimeProvider) HangupCallReturns(err error) {
+	f.hangupCallReturns.err = err
 }
 
 func (f *fakeRealtimeProvider) HangupCallCallCount() int {

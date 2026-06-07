@@ -17,7 +17,7 @@ func newMemoryRoomRuntimeRepositoryForTest() *memoryRoomRuntimeRepositoryForTest
 
 func (r *memoryRoomRuntimeRepositoryForTest) Save(ctx context.Context, room entity.Room) error {
 	_ = ctx
-	r.rooms[room.ID] = room
+	r.rooms[room.ID] = room.Clone()
 	return nil
 }
 
@@ -25,7 +25,7 @@ func (r *memoryRoomRuntimeRepositoryForTest) FindBySessionID(ctx context.Context
 	_ = ctx
 	for _, room := range r.rooms {
 		if room.SessionID == sessionID {
-			return room, true, nil
+			return room.Clone(), true, nil
 		}
 	}
 	return entity.Room{}, false, nil
@@ -35,7 +35,7 @@ func (r *memoryRoomRuntimeRepositoryForTest) List(ctx context.Context) ([]entity
 	_ = ctx
 	rooms := make([]entity.Room, 0, len(r.rooms))
 	for _, room := range r.rooms {
-		rooms = append(rooms, room)
+		rooms = append(rooms, room.Clone())
 	}
 	return rooms, nil
 }

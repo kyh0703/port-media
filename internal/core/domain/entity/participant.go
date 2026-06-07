@@ -28,6 +28,15 @@ func NewParticipant(id vo.ParticipantID, role vo.ParticipantRole, now time.Time)
 	}
 }
 
+func (p Participant) Clone() Participant {
+	clone := p
+	clone.Tracks = make(map[vo.TrackID]Track, len(p.Tracks))
+	for id, track := range p.Tracks {
+		clone.Tracks[id] = track
+	}
+	return clone
+}
+
 func (p *Participant) SetProviderCallID(providerCallID string, now time.Time) {
 	p.ProviderCallID = providerCallID
 	p.UpdatedAt = now

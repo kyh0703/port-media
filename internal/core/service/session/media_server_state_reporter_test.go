@@ -110,8 +110,8 @@ func (f fakeStateReporterService) ShutdownActiveRooms(ctx context.Context) (int,
 	return 0, nil
 }
 
-func (f fakeStateReporterService) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResponse, bool, error) {
-	return sessiondto.GetSessionStatusResponse{}, false, nil
+func (f fakeStateReporterService) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResult, bool, error) {
+	return sessiondto.GetSessionStatusResult{}, false, nil
 }
 
 func (f fakeStateReporterService) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {

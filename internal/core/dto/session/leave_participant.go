@@ -8,8 +8,8 @@ type LeaveParticipantRequest struct {
 }
 
 type LeaveParticipantResponse struct {
-	SessionID     string `json:"session_id"`
-	RoomID        string `json:"room_id"`
-	ParticipantID string `json:"participant_id"`
-	Status        string `json:"status"`
+	SessionID     string
+	RoomID        string
+	ParticipantID string
+	Status        string
 }

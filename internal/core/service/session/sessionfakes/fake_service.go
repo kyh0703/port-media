@@ -77,19 +77,19 @@ type FakeService struct {
 		result1 sessiona.RuntimeStatsResponse
 		result2 error
 	}
-	GetSessionStatusStub        func(context.Context, sessiona.GetSessionStatusRequest) (sessiona.GetSessionStatusResponse, bool, error)
+	GetSessionStatusStub        func(context.Context, sessiona.GetSessionStatusRequest) (sessiona.GetSessionStatusResult, bool, error)
 	getSessionStatusMutex       sync.RWMutex
 	getSessionStatusArgsForCall []struct {
 		arg1 context.Context
 		arg2 sessiona.GetSessionStatusRequest
 	}
 	getSessionStatusReturns struct {
-		result1 sessiona.GetSessionStatusResponse
+		result1 sessiona.GetSessionStatusResult
 		result2 bool
 		result3 error
 	}
 	getSessionStatusReturnsOnCall map[int]struct {
-		result1 sessiona.GetSessionStatusResponse
+		result1 sessiona.GetSessionStatusResult
 		result2 bool
 		result3 error
 	}
@@ -458,7 +458,7 @@ func (fake *FakeService) GetRuntimeStatsReturnsOnCall(i int, result1 sessiona.Ru
 	}{result1, result2}
 }
 
-func (fake *FakeService) GetSessionStatus(arg1 context.Context, arg2 sessiona.GetSessionStatusRequest) (sessiona.GetSessionStatusResponse, bool, error) {
+func (fake *FakeService) GetSessionStatus(arg1 context.Context, arg2 sessiona.GetSessionStatusRequest) (sessiona.GetSessionStatusResult, bool, error) {
 	fake.getSessionStatusMutex.Lock()
 	ret, specificReturn := fake.getSessionStatusReturnsOnCall[len(fake.getSessionStatusArgsForCall)]
 	fake.getSessionStatusArgsForCall = append(fake.getSessionStatusArgsForCall, struct {
@@ -484,7 +484,7 @@ func (fake *FakeService) GetSessionStatusCallCount() int {
 	return len(fake.getSessionStatusArgsForCall)
 }
 
-func (fake *FakeService) GetSessionStatusCalls(stub func(context.Context, sessiona.GetSessionStatusRequest) (sessiona.GetSessionStatusResponse, bool, error)) {
+func (fake *FakeService) GetSessionStatusCalls(stub func(context.Context, sessiona.GetSessionStatusRequest) (sessiona.GetSessionStatusResult, bool, error)) {
 	fake.getSessionStatusMutex.Lock()
 	defer fake.getSessionStatusMutex.Unlock()
 	fake.GetSessionStatusStub = stub
@@ -497,30 +497,30 @@ func (fake *FakeService) GetSessionStatusArgsForCall(i int) (context.Context, se
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeService) GetSessionStatusReturns(result1 sessiona.GetSessionStatusResponse, result2 bool, result3 error) {
+func (fake *FakeService) GetSessionStatusReturns(result1 sessiona.GetSessionStatusResult, result2 bool, result3 error) {
 	fake.getSessionStatusMutex.Lock()
 	defer fake.getSessionStatusMutex.Unlock()
 	fake.GetSessionStatusStub = nil
 	fake.getSessionStatusReturns = struct {
-		result1 sessiona.GetSessionStatusResponse
+		result1 sessiona.GetSessionStatusResult
 		result2 bool
 		result3 error
 	}{result1, result2, result3}
 }
 
-func (fake *FakeService) GetSessionStatusReturnsOnCall(i int, result1 sessiona.GetSessionStatusResponse, result2 bool, result3 error) {
+func (fake *FakeService) GetSessionStatusReturnsOnCall(i int, result1 sessiona.GetSessionStatusResult, result2 bool, result3 error) {
 	fake.getSessionStatusMutex.Lock()
 	defer fake.getSessionStatusMutex.Unlock()
 	fake.GetSessionStatusStub = nil
 	if fake.getSessionStatusReturnsOnCall == nil {
 		fake.getSessionStatusReturnsOnCall = make(map[int]struct {
-			result1 sessiona.GetSessionStatusResponse
+			result1 sessiona.GetSessionStatusResult
 			result2 bool
 			result3 error
 		})
 	}
 	fake.getSessionStatusReturnsOnCall[i] = struct {
-		result1 sessiona.GetSessionStatusResponse
+		result1 sessiona.GetSessionStatusResult
 		result2 bool
 		result3 error
 	}{result1, result2, result3}

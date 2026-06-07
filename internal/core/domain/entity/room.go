@@ -20,7 +20,7 @@ type Room struct {
 	ConversationID        vo.ConversationID
 	UserID                string
 	Status                vo.RoomStatus
-	Participants          map[vo.ParticipantID]Participant
+	participants          map[vo.ParticipantID]Participant
 	LastRealtimeEventType string
 	LastRealtimeEventAt   time.Time
 	CreatedAt             time.Time
@@ -33,7 +33,7 @@ func NewRoom(id vo.RoomID, sessionID vo.SessionID, conversationID vo.Conversatio
 		SessionID:      sessionID,
 		ConversationID: conversationID,
 		Status:         vo.RoomStatusCreated,
-		Participants:   make(map[vo.ParticipantID]Participant),
+		participants:   make(map[vo.ParticipantID]Participant),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -69,10 +69,10 @@ func (r *Room) addParticipant(participant Participant, now time.Time) error {
 	if !r.CanJoinParticipants() {
 		return ErrRoomNotJoinable
 	}
-	if _, exists := r.Participants[participant.ID]; exists {
+	if _, exists := r.participants[participant.ID]; exists {
 		return ErrParticipantAlreadyJoined
 	}
-	r.Participants[participant.ID] = participant
+	r.participants[participant.ID] = participant.Clone()
 	r.UpdatedAt = now
 	if r.Status == vo.RoomStatusCreated {
 		r.Status = vo.RoomStatusActive
@@ -81,18 +81,42 @@ func (r *Room) addParticipant(participant Participant, now time.Time) error {
 }
 
 func (r Room) Participant(participantID vo.ParticipantID) (Participant, bool) {
-	participant, ok := r.Participants[participantID]
-	return participant, ok
-}
-
-func (r *Room) RemoveParticipant(participantID vo.ParticipantID, now time.Time) (Participant, bool) {
-	participant, ok := r.Participants[participantID]
+	participant, ok := r.participants[participantID]
 	if !ok {
 		return Participant{}, false
 	}
-	delete(r.Participants, participantID)
+	return participant.Clone(), true
+}
+
+func (r Room) Clone() Room {
+	clone := r
+	clone.participants = make(map[vo.ParticipantID]Participant, len(r.participants))
+	for id, participant := range r.participants {
+		clone.participants[id] = participant.Clone()
+	}
+	return clone
+}
+
+func (r Room) Participants() map[vo.ParticipantID]Participant {
+	participants := make(map[vo.ParticipantID]Participant, len(r.participants))
+	for id, participant := range r.participants {
+		participants[id] = participant.Clone()
+	}
+	return participants
+}
+
+func (r Room) ParticipantCount() int {
+	return len(r.participants)
+}
+
+func (r *Room) RemoveParticipant(participantID vo.ParticipantID, now time.Time) (Participant, bool) {
+	participant, ok := r.participants[participantID]
+	if !ok {
+		return Participant{}, false
+	}
+	delete(r.participants, participantID)
 	r.UpdatedAt = now
-	return participant, true
+	return participant.Clone(), true
 }
 
 func (r *Room) Touch(now time.Time) {
@@ -110,7 +134,7 @@ func (r Room) HasOpenAIAgent() bool {
 }
 
 func (r Room) hasParticipantRole(role vo.ParticipantRole) bool {
-	for _, participant := range r.Participants {
+	for _, participant := range r.participants {
 		if participant.Role == role {
 			return true
 		}
@@ -119,19 +143,19 @@ func (r Room) hasParticipantRole(role vo.ParticipantRole) bool {
 }
 
 func (r *Room) UpdateParticipantState(participantID vo.ParticipantID, state vo.ConnectionState, now time.Time) bool {
-	participant, ok := r.Participants[participantID]
+	participant, ok := r.participants[participantID]
 	if !ok {
 		return false
 	}
 
 	participant.SetState(state, now)
-	r.Participants[participantID] = participant
+	r.participants[participantID] = participant
 	r.UpdatedAt = now
 	return true
 }
 
 func (r *Room) UpdateParticipantTrackState(participantID vo.ParticipantID, kind vo.TrackKind, state vo.TrackState, now time.Time) bool {
-	participant, ok := r.Participants[participantID]
+	participant, ok := r.participants[participantID]
 	if !ok {
 		return false
 	}
@@ -139,7 +163,7 @@ func (r *Room) UpdateParticipantTrackState(participantID vo.ParticipantID, kind 
 		return false
 	}
 
-	r.Participants[participantID] = participant
+	r.participants[participantID] = participant
 	r.UpdatedAt = now
 	return true
 }
@@ -147,25 +171,25 @@ func (r *Room) UpdateParticipantTrackState(participantID vo.ParticipantID, kind 
 func (r *Room) Close(now time.Time) {
 	r.Status = vo.RoomStatusClosed
 	r.UpdatedAt = now
-	for id, participant := range r.Participants {
+	for id, participant := range r.participants {
 		participant.SetState(vo.ConnectionStateClosed, now)
 		for trackID, track := range participant.Tracks {
 			track.SetState(vo.TrackStateEnded, now)
 			participant.Tracks[trackID] = track
 		}
-		r.Participants[id] = participant
+		r.participants[id] = participant
 	}
 }
 
 func (r *Room) Fail(now time.Time) {
 	r.Status = vo.RoomStatusFailed
 	r.UpdatedAt = now
-	for id, participant := range r.Participants {
+	for id, participant := range r.participants {
 		participant.SetState(vo.ConnectionStateFailed, now)
 		for trackID, track := range participant.Tracks {
 			track.SetState(vo.TrackStateFailed, now)
 			participant.Tracks[trackID] = track
 		}
-		r.Participants[id] = participant
+		r.participants[id] = participant
 	}
 }
