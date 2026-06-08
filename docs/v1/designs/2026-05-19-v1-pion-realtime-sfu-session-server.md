@@ -1,7 +1,8 @@
 ---
 feature: pion-realtime-sfu-session-server
-status: plan_ready
+status: completed
 created_at: 2026-05-19T14:19:33+09:00
+completed_at: 2026-06-08
 ---
 
 # Pion Realtime SFU Session Server

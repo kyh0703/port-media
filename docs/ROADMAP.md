@@ -2,8 +2,9 @@
 
 ## Current Track
 
-- Active version: `v1`
-- Exit criteria:
+- Active version: `none`
+- Latest completed version: `v1`
+- v1 exit criteria:
   - `dubu-web` can create an authenticated realtime session through `dubu-api`.
   - `dubu-web` can establish WebRTC audio with `portfoilo-media`.
   - `portfoilo-media` can connect a matching OpenAI Realtime participant for the session.
