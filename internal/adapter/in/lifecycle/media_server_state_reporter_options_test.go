@@ -22,7 +22,7 @@ func TestMediaServerStateReporterOptionsDefaultsURLFromServerConfig(t *testing.T
 
 func TestMediaServerStateReporterOptionsUsesConfigFields(t *testing.T) {
 	options := NewMediaServerStateReporterOptions(&configs.Config{
-		NodeID: "node-a",
+		NodeID: 1,
 		MediaServer: configs.MediaServerConfig{
 			URL:         "http://media-a.internal:8080",
 			Status:      "healthy",
@@ -30,8 +30,8 @@ func TestMediaServerStateReporterOptionsUsesConfigFields(t *testing.T) {
 		},
 	})
 
-	if options.ID != "node-a" {
-		t.Fatalf("options.ID = %q, want node-a", options.ID)
+	if options.ID != 1 {
+		t.Fatalf("options.ID = %d, want 1", options.ID)
 	}
 	if options.URL != "http://media-a.internal:8080" {
 		t.Fatalf("options.URL = %q", options.URL)

@@ -3,7 +3,7 @@ package configs
 import "time"
 
 type Config struct {
-	NodeID      string            `env:"NODE_ID,notEmpty" validate:"required"`
+	NodeID      int               `env:"NODE_ID,required" validate:"gt=0"`
 	App         AppConfig         `envPrefix:"APP_"`
 	Server      ServerConfig      `envPrefix:"SERVER_"`
 	Log         LogConfig         `envPrefix:"LOG_"`

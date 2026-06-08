@@ -10,7 +10,7 @@ const (
 )
 
 type MediaServerState struct {
-	ID                 string
+	ID                 int
 	URL                string
 	Status             MediaServerStatus
 	ActiveRooms        int

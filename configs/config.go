@@ -2,7 +2,6 @@ package configs
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/go-playground/validator/v10"
@@ -21,7 +20,6 @@ func NewConfig() (*Config, error) {
 }
 
 func validateConfig(cfg Config) error {
-	cfg.NodeID = strings.TrimSpace(cfg.NodeID)
 	if err := validator.New().Struct(cfg); err != nil {
 		return fmt.Errorf("validate config: %w", err)
 	}

@@ -11,7 +11,7 @@ import (
 )
 
 type MediaServerStateReporterOptions struct {
-	ID          string
+	ID          int
 	URL         string
 	Status      entity.MediaServerStatus
 	MaxSessions int
@@ -20,7 +20,7 @@ type MediaServerStateReporterOptions struct {
 type MediaServerStateReporter struct {
 	states      repository.MediaServerStateRepository
 	stats       usecase.GetRuntimeStatsQuery
-	id          string
+	id          int
 	url         string
 	status      entity.MediaServerStatus
 	maxSessions int
@@ -55,7 +55,7 @@ func (r *MediaServerStateReporter) Report(ctx context.Context) error {
 		return err
 	}
 	if err := r.states.Save(ctx, state); err != nil {
-		return fmt.Errorf("save media server state %s: %w", state.ID, err)
+		return fmt.Errorf("save media server state %d: %w", state.ID, err)
 	}
 	return nil
 }
@@ -66,7 +66,7 @@ func (r *MediaServerStateReporter) ReportOffline(ctx context.Context) error {
 		return err
 	}
 	if err := r.states.SaveOffline(ctx, state); err != nil {
-		return fmt.Errorf("save offline media server state %s: %w", state.ID, err)
+		return fmt.Errorf("save offline media server state %d: %w", state.ID, err)
 	}
 	return nil
 }

@@ -1,7 +1,6 @@
 package configs
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
@@ -14,14 +13,14 @@ func TestValidateConfigRequiresNodeID(t *testing.T) {
 }
 
 func TestValidateConfigAcceptsNodeID(t *testing.T) {
-	err := validateConfig(Config{NodeID: "node-a"})
+	err := validateConfig(Config{NodeID: 1})
 	if err != nil {
 		t.Fatalf("validateConfig() error = %v", err)
 	}
 }
 
 func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
-	t.Setenv("NODE_ID", "node-a")
+	t.Setenv("NODE_ID", "1")
 	t.Setenv("OPENAI_API_KEY", "test-api-key")
 	t.Setenv("SERVER_PORT", "9090")
 	t.Setenv("SERVER_CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
@@ -36,8 +35,8 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConfig() error = %v", err)
 	}
-	if cfg.NodeID != "node-a" {
-		t.Fatalf("NodeID = %q, want node-a", cfg.NodeID)
+	if cfg.NodeID != 1 {
+		t.Fatalf("NodeID = %d, want 1", cfg.NodeID)
 	}
 	if cfg.OpenAI.APIKey != "test-api-key" {
 		t.Fatalf("OpenAI.APIKey = %q, want test-api-key", cfg.OpenAI.APIKey)
@@ -69,7 +68,7 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 }
 
 func TestNewConfigLoadsDefaults(t *testing.T) {
-	t.Setenv("NODE_ID", "node-a")
+	t.Setenv("NODE_ID", "1")
 	t.Setenv("OPENAI_API_KEY", "test-api-key")
 
 	cfg, err := NewConfig()
@@ -98,7 +97,14 @@ func TestNewConfigRejectsMissingRequiredEnv(t *testing.T) {
 	if err == nil {
 		t.Fatal("NewConfig() error is nil, want required env error")
 	}
-	if !strings.Contains(err.Error(), "NODE_ID") {
-		t.Fatalf("NewConfig() error = %v, want NODE_ID error", err)
+}
+
+func TestNewConfigRejectsNonNumericNodeID(t *testing.T) {
+	t.Setenv("NODE_ID", "node-a")
+	t.Setenv("OPENAI_API_KEY", "test-api-key")
+
+	_, err := NewConfig()
+	if err == nil {
+		t.Fatal("NewConfig() error is nil, want NODE_ID parse error")
 	}
 }

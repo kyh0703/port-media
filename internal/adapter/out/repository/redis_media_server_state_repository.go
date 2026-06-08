@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/configs"
@@ -56,19 +57,23 @@ func (r *RedisMediaServerStateRepository) writeState(ctx context.Context, state 
 
 	pipe := r.client.TxPipeline()
 	if listed {
-		pipe.SAdd(ctx, mediaServersSetKey, state.ID)
+		pipe.SAdd(ctx, mediaServersSetKey, mediaServerStateID(state.ID))
 	} else {
-		pipe.SRem(ctx, mediaServersSetKey, state.ID)
+		pipe.SRem(ctx, mediaServersSetKey, mediaServerStateID(state.ID))
 	}
 	pipe.Set(ctx, mediaServerStateKey(state.ID), body, r.ttl)
 	if _, err := pipe.Exec(ctx); err != nil {
-		return fmt.Errorf("write media server state %s: %w", state.ID, err)
+		return fmt.Errorf("write media server state %d: %w", state.ID, err)
 	}
 	return nil
 }
 
-func mediaServerStateKey(id string) string {
-	return mediaServerStateKeyPrefix + id
+func mediaServerStateKey(id int) string {
+	return mediaServerStateKeyPrefix + mediaServerStateID(id)
+}
+
+func mediaServerStateID(id int) string {
+	return strconv.Itoa(id)
 }
 
 func mediaServerStateTTL(cfg *configs.Config) time.Duration {
@@ -86,7 +91,7 @@ func mediaServerStateInterval(cfg *configs.Config) time.Duration {
 }
 
 type mediaServerStatePayload struct {
-	ID                 string    `json:"id"`
+	ID                 int       `json:"id"`
 	URL                string    `json:"url"`
 	Status             string    `json:"status"`
 	ActiveRooms        int       `json:"active_rooms"`

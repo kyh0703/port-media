@@ -18,11 +18,11 @@ func NewMediaServerStateReporterOptions(cfg *configs.Config) sessionservice.Medi
 	}
 }
 
-func mediaServerID(cfg *configs.Config) string {
+func mediaServerID(cfg *configs.Config) int {
 	if cfg == nil {
-		return ""
+		return 0
 	}
-	return strings.TrimSpace(cfg.NodeID)
+	return cfg.NodeID
 }
 
 func mediaServerURL(cfg *configs.Config) string {

@@ -19,7 +19,7 @@ func TestMediaServerStateReporterReportsRuntimeState(t *testing.T) {
 			Tracks:       3,
 		},
 	}, MediaServerStateReporterOptions{
-		ID:          "media-a",
+		ID:          1,
 		URL:         "http://media-a.internal:8080",
 		Status:      entity.MediaServerStatusHealthy,
 		MaxSessions: 10,
@@ -32,8 +32,8 @@ func TestMediaServerStateReporterReportsRuntimeState(t *testing.T) {
 		t.Fatalf("Report() error = %v", err)
 	}
 
-	if states.saved.ID != "media-a" {
-		t.Fatalf("state.ID = %q, want media-a", states.saved.ID)
+	if states.saved.ID != 1 {
+		t.Fatalf("state.ID = %d, want 1", states.saved.ID)
 	}
 	if states.saved.URL != "http://media-a.internal:8080" {
 		t.Fatalf("state.URL = %q", states.saved.URL)
@@ -52,7 +52,7 @@ func TestMediaServerStateReporterReportsRuntimeState(t *testing.T) {
 func TestMediaServerStateReporterReportsOfflineState(t *testing.T) {
 	states := &fakeMediaServerStateRepository{}
 	reporter := NewMediaServerStateReporter(states, fakeStateReporterService{}, MediaServerStateReporterOptions{
-		ID:  "media-a",
+		ID:  1,
 		URL: "http://media-a.internal:8080",
 	})
 

@@ -32,7 +32,7 @@ func TestRedisMediaServerStateRepositorySavesState(t *testing.T) {
 	updatedAt := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
 
 	err = repo.Save(context.Background(), entity.MediaServerState{
-		ID:                 "media-a",
+		ID:                 1,
 		URL:                "http://media-a.internal:8080",
 		Status:             entity.MediaServerStatusHealthy,
 		ActiveRooms:        2,
@@ -50,11 +50,11 @@ func TestRedisMediaServerStateRepositorySavesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SMembers() error = %v", err)
 	}
-	if len(members) != 1 || members[0] != "media-a" {
-		t.Fatalf("members = %v, want [media-a]", members)
+	if len(members) != 1 || members[0] != "1" {
+		t.Fatalf("members = %v, want [1]", members)
 	}
 
-	raw, err := client.Get(context.Background(), mediaServerStateKey("media-a")).Bytes()
+	raw, err := client.Get(context.Background(), mediaServerStateKey(1)).Bytes()
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
@@ -63,8 +63,8 @@ func TestRedisMediaServerStateRepositorySavesState(t *testing.T) {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if payload.ID != "media-a" {
-		t.Fatalf("payload.ID = %q, want media-a", payload.ID)
+	if payload.ID != 1 {
+		t.Fatalf("payload.ID = %d, want 1", payload.ID)
 	}
 	if payload.URL != "http://media-a.internal:8080" {
 		t.Fatalf("payload.URL = %q", payload.URL)
@@ -85,7 +85,7 @@ func TestRedisMediaServerStateRepositorySavesState(t *testing.T) {
 		t.Fatalf("payload.UpdatedAt = %s", payload.UpdatedAt)
 	}
 
-	ttl, err := client.TTL(context.Background(), mediaServerStateKey("media-a")).Result()
+	ttl, err := client.TTL(context.Background(), mediaServerStateKey(1)).Result()
 	if err != nil {
 		t.Fatalf("TTL() error = %v", err)
 	}
@@ -112,7 +112,7 @@ func TestRedisMediaServerStateRepositorySavesOfflineState(t *testing.T) {
 		},
 	})
 	state := entity.MediaServerState{
-		ID:        "media-a",
+		ID:        1,
 		URL:       "http://media-a.internal:8080",
 		Status:    entity.MediaServerStatusHealthy,
 		UpdatedAt: time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC),
@@ -133,7 +133,7 @@ func TestRedisMediaServerStateRepositorySavesOfflineState(t *testing.T) {
 		t.Fatalf("members = %v, want empty", members)
 	}
 
-	raw, err := client.Get(context.Background(), mediaServerStateKey("media-a")).Bytes()
+	raw, err := client.Get(context.Background(), mediaServerStateKey(1)).Bytes()
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
