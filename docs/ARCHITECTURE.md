@@ -8,8 +8,8 @@
 ## Shared Boundaries
 
 - Core domains:
-  - Web client: `../dubu-web` owns user interaction, microphone capture, session UI, and history UI.
-  - API server: `../dubu-api` owns authentication, authorization, session creation, conversation ownership, durable persistence, and history APIs.
+  - Web client: owns user interaction, microphone capture, session UI, and history UI.
+  - API server: owns authentication, authorization, session creation, conversation ownership, durable persistence, and history APIs.
   - Media server: this repository owns Pion WebRTC runtime, SFU rooms, participants, tracks, OpenAI Realtime connectivity, and media lifecycle.
   - AI provider: OpenAI Realtime provides the speech-to-speech model session.
 - External integrations:
@@ -18,19 +18,19 @@
   - Optional STUN/TURN infrastructure for client and media server connectivity.
   - Shared Redis key-value storage for short-lived media tokens and live media session state.
 - Data boundaries:
-  - Client receives Dubu API URL, media server URL, session identifiers, and a short-lived media token from `dubu-api`.
-  - Client sends session creation to `dubu-api`.
+  - Client receives API URL, media server URL, session identifiers, and a short-lived media token from the API server.
+  - Client sends session creation to the API server.
   - Clients send SDP signaling directly to `portfoilo-media` with the media token.
   - Client never receives `OPENAI_API_KEY` or direct OpenAI Realtime credentials.
   - Media server may receive a short-lived session token and OpenAI API configuration.
-  - `dubu-api` remains the durable source of truth for user ownership and conversation history.
+  - The API server remains the durable source of truth for user ownership and conversation history.
 
 ## Shared Constraints
 
 - Security:
-  - All user-owned session creation starts in `dubu-api` after JWT verification.
-  - Media server accepts client joins only with a token minted by `dubu-api`.
-  - Media tokens are opaque bearer tokens stored in Redis under `media:token:<token>` with a TTL owned by `dubu-api`.
+  - All user-owned session creation starts in the API server after JWT verification.
+  - Media server accepts client joins only with a token minted by the API server.
+  - Media tokens are opaque bearer tokens stored in Redis under `media:token:<token>` with a TTL owned by the API server.
   - The Redis token value contains `session_id`, `conversation_id`, and `user_id`.
   - OpenAI credentials stay server-side.
 - Reliability:
@@ -40,8 +40,8 @@
   - Individual client participant connection or track failure must update that participant state without failing the whole room.
   - Runtime rooms idle longer than `room_idle_timeout` must close media peers, hang up provider calls, and write closed live state.
   - Service shutdown must close active runtime rooms and hang up provider calls before exit.
-  - `dubu-api` can read the Redis session state when it needs current media status.
-  - Durable history, transcript, and audit persistence remain owned by `dubu-api`.
+  - The API server can read the Redis session state when it needs current media status.
+  - Durable history, transcript, and audit persistence remain owned by the API server.
 - Performance:
   - v1 is audio-first.
   - Media forwarding should avoid transcoding in the normal path.
@@ -58,16 +58,16 @@
 - Language/runtime: Go.
 - WebRTC stack: Pion.
 - Server shape: standalone media service in this repository.
-- Client-facing session creation: owned by `dubu-api`.
-- Client-facing media signaling: owned by `portfoilo-media`, authorized by a short-lived media token minted by `dubu-api`.
+- Client-facing session creation: owned by the API server.
+- Client-facing media signaling: owned by `portfoilo-media`, authorized by a short-lived media token minted by the API server.
 - API integration: shared Redis state lookup, not direct WebRTC or lifecycle callback ownership.
 - Provider integration: OpenAI Realtime WebRTC call from the media server.
 
 ## Primary Flow
 
-1. Client asks `dubu-api` to create a realtime session.
-2. `dubu-api` verifies the user's JWT and creates a session/conversation record.
-3. `dubu-api` returns `sessionId`, `conversationId`, `mediaServerUrl`, and a short-lived `mediaToken` to the client.
+1. Client asks the API server to create a realtime session.
+2. The API server verifies the user's JWT and creates a session/conversation record.
+3. The API server returns `sessionId`, `conversationId`, `mediaServerUrl`, and a short-lived `mediaToken` to the client.
 4. Client creates an SDP offer and posts it to `/api/v1/sessions/:sessionId/join?mode=publisher` or `/api/v1/sessions/:sessionId/join?mode=listener` with `Authorization: Bearer <mediaToken>`.
 5. `portfoilo-media` validates the media token and creates or joins one SFU room for the session.
 6. `portfoilo-media` waits for local ICE gathering and returns an SDP answer to the client.
@@ -77,13 +77,13 @@
 10. `portfoilo-media` opens the configured OpenAI Realtime data channel, default `oai-events`, for provider control/events.
 11. `portfoilo-media` forwards publisher client audio to OpenAI and OpenAI audio back to all connected clients.
 12. `portfoilo-media` writes live media state to Redis under `media:session:<session_id>`.
-13. `dubu-api` reads live media state from Redis when it needs current status and persists durable history through its own workflows.
+13. The API server reads live media state from Redis when it needs current status and persists durable history through its own workflows.
 14. Client reads history and final state from existing API-owned history endpoints.
 
 ## Core Model
 
 - Room:
-  - Represents one Dubu realtime session.
+  - Represents one realtime session.
   - Has a stable `sessionId` and `conversationId`.
 - Participant:
   - `client`: user client participant.
@@ -101,4 +101,4 @@
 - Build a Pion SFU session server, not a thin one-off WebRTC gateway.
 - Limit v1 runtime to one OpenAI participant per room, while allowing multiple client participants with per-offer `publisher` or `listener` media direction.
 - Keep SFU room/participant/track abstractions now because future monitoring and multi-session work depends on them.
-- Keep `dubu-api` out of direct WebRTC connection management.
+- Keep the API server out of direct WebRTC connection management.

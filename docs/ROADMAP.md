@@ -5,11 +5,11 @@
 - Active version: `none`
 - Latest completed version: `v1`
 - v1 exit criteria:
-  - `dubu-web` can create an authenticated realtime session through `dubu-api`.
-  - `dubu-web` can establish WebRTC audio with `portfoilo-media`.
+  - The web client can create an authenticated realtime session through the API server.
+  - The web client can establish WebRTC audio with `portfoilo-media`.
   - `portfoilo-media` can connect a matching OpenAI Realtime participant for the session.
   - Client audio is forwarded to OpenAI Realtime and OpenAI audio is forwarded back to the client.
-  - `portfoilo-media` stores live media session status in Redis for `dubu-api` lookup.
+  - `portfoilo-media` stores live media session status in Redis for API server lookup.
   - The system exposes enough logs and Redis live-state fields to support later monitoring.
 
 ## Upcoming Versions

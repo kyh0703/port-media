@@ -9,7 +9,7 @@ completed_at: 2026-06-08
 
 ## Goal
 
-Create the first executable plan for a Pion-based realtime media server that sits between Dubu browsers and OpenAI Realtime. The media server should use an SFU room/participant/track model from v1, while `dubu-api` remains the source of truth for authenticated session creation and persistence.
+Create the first executable plan for a Pion-based realtime media server that sits between browsers and OpenAI Realtime. The media server should use an SFU room/participant/track model from v1, while the API server remains the source of truth for authenticated session creation and persistence.
 
 ## Context / Inputs
 
@@ -17,13 +17,13 @@ Create the first executable plan for a Pion-based realtime media server that sit
   - `docs/STATE.md`
   - `docs/ROADMAP.md`
   - `docs/ARCHITECTURE.md`
-  - `../dubu-api/docs/ARCHITECTURE.md`
-  - `../dubu-web/docs/ARCHITECTURE.md`
+  - API server architecture docs
+  - Web client architecture docs
 - Existing system facts:
-  - `../dubu-web` currently creates a browser `RTCPeerConnection`, posts SDP to `dubu-api`, and sets the OpenAI SDP answer as the remote description.
-  - `../dubu-api` currently brokers OpenAI Realtime call creation, stores provider call ids, opens sideband monitoring, and persists conversation/session events.
+  - The web client currently creates a browser `RTCPeerConnection`, posts SDP to the API server, and sets the OpenAI SDP answer as the remote description.
+  - The API server currently brokers OpenAI Realtime call creation, stores provider call ids, opens sideband monitoring, and persists conversation/session events.
   - The new direction removes direct browser-to-OpenAI media connectivity.
-  - `dubu-api` should create sessions, own user authorization, and persist lifecycle/history without directly managing WebRTC peer connections.
+  - The API server should create sessions, own user authorization, and persist lifecycle/history without directly managing WebRTC peer connections.
   - `portfoilo-media` should own Pion peer connections, room runtime, participant runtime, track forwarding, OpenAI Realtime connectivity, and connection lifecycle.
 - External constraints:
   - OpenAI Realtime supports WebRTC call creation through `/v1/realtime/calls`, where a server sends an SDP offer and receives an SDP answer.
@@ -32,13 +32,13 @@ Create the first executable plan for a Pion-based realtime media server that sit
 
 ## Problem Statement
 
-Dubu needs to stop letting clients connect directly to OpenAI Realtime and instead route realtime audio through a first-party media server. The first version must preserve `dubu-api` as the authenticated session and persistence owner, while introducing a Pion SFU runtime that can manage client participants, an OpenAI Realtime participant, media forwarding, lifecycle events, and monitoring-ready telemetry. This needs to be narrow enough for v1, but not modeled as a throwaway gateway because later versions will add more sessions, monitor participants, and operational monitoring.
+The product needs to stop letting clients connect directly to OpenAI Realtime and instead route realtime audio through a first-party media server. The first version must preserve the API server as the authenticated session and persistence owner, while introducing a Pion SFU runtime that can manage client participants, an OpenAI Realtime participant, media forwarding, lifecycle events, and monitoring-ready telemetry. This needs to be narrow enough for v1, but not modeled as a throwaway gateway because later versions will add more sessions, monitor participants, and operational monitoring.
 
 ## Decision Drivers
 
 - Client must never receive OpenAI credentials or directly manage OpenAI Realtime connectivity.
-- `dubu-api` must remain the source of truth for user ownership, session creation, durable state, and history.
-- The media server must own WebRTC runtime details and avoid pushing connection management back into `dubu-api`.
+- The API server must remain the source of truth for user ownership, session creation, durable state, and history.
+- The media server must own WebRTC runtime details and avoid pushing connection management back into the API server.
 - The model must support later monitoring participants and multi-session operation.
 - v1 must stay executable by limiting media scope to audio-only and one OpenAI agent participant per room while allowing multiple client participants with per-offer publisher/listener direction.
 - Operational telemetry must be designed early enough that later monitoring work does not require changing every event shape.
@@ -64,7 +64,7 @@ Dubu needs to stop letting clients connect directly to OpenAI Realtime and inste
 - Summary: Build a Pion SFU session server with room, participant, and track abstractions, but constrain v1 to audio-only and one OpenAI agent participant.
 - Pros:
   - Matches the future need for more sessions, monitoring, and participant-level visibility.
-  - Keeps `dubu-api` cleanly separated from WebRTC runtime.
+  - Keeps the API server cleanly separated from WebRTC runtime.
   - Allows monitor participants, multi-user rooms, and routing policies to be added later without replacing the core model.
   - Provides natural telemetry labels: room, participant role, track type, connection state, and failure reason.
 - Cons:
@@ -75,10 +75,10 @@ Dubu needs to stop letting clients connect directly to OpenAI Realtime and inste
 
 ### Option C
 
-- Summary: Keep current direct browser-to-OpenAI WebRTC and improve `dubu-api` sideband/session management only.
+- Summary: Keep current direct browser-to-OpenAI WebRTC and improve API server sideband/session management only.
 - Pros:
   - Lowest implementation cost.
-  - Preserves existing working direction in `../dubu-web` and `../dubu-api`.
+  - Preserves existing working direction in the web client and API server.
 - Cons:
   - Does not satisfy the requirement that browser media flows through the media server.
   - Cannot centralize media runtime monitoring in first-party infrastructure.
@@ -91,7 +91,7 @@ Dubu needs to stop letting clients connect directly to OpenAI Realtime and inste
 - Choice: Option B, Pion SFU session server with constrained v1 scope.
 - Why now:
   - The user explicitly wants SFU capability because more sessions and monitoring are planned later.
-  - The API/media boundary is clear: `dubu-api` creates and persists sessions; `portfoilo-media` owns realtime connections.
+  - The API/media boundary is clear: the API server creates and persists sessions; `portfoilo-media` owns realtime connections.
   - The extra abstraction is justified by concrete future requirements, not speculative scaling alone.
 - Rejected alternatives:
   - Thin gateway rejected because it creates a near-term rewrite risk.
@@ -101,13 +101,13 @@ Dubu needs to stop letting clients connect directly to OpenAI Realtime and inste
 
 - In:
   - Define the service boundary for `portfoilo-media`.
-  - Define `dubu-api` session creation contract inputs/outputs.
-  - Define media token verification responsibilities between `dubu-api` and `portfoilo-media`.
+  - Define API server session creation contract inputs/outputs.
+  - Define media token verification responsibilities between the API server and `portfoilo-media`.
   - Define Pion SFU room/participant/track model for v1.
-  - Define client-to-media-server signaling flow authorized by a `dubu-api` minted media token.
+  - Define client-to-media-server signaling flow authorized by an API-server-minted media token.
   - Define OpenAI Realtime participant connection flow from the media server.
   - Define audio forwarding path client -> OpenAI and OpenAI -> client.
-  - Define Redis key-value media session state for `dubu-api` status lookup.
+  - Define Redis key-value media session state for API server status lookup.
   - Define monitoring-ready log/metric dimensions.
 - Out:
   - Multi-client room UI.
@@ -127,7 +127,7 @@ Dubu needs to stop letting clients connect directly to OpenAI Realtime and inste
 
 ## Open Questions
 
-- Media token verification uses Redis lookup of an opaque token stored by `dubu-api` with TTL.
+- Media token verification uses Redis lookup of an opaque token stored by the API server with TTL.
 - Redis token values must include `session_id`, `conversation_id`, and `user_id`.
 - Live media session state uses Redis key `media:session:<session_id>` with TTL, room status, WebRTC connection state, audio media state, and `last_active_at`.
 - Failure cleanup writes failed room, connection, and media state before leaving the session for TTL expiry.
@@ -155,34 +155,34 @@ Dubu needs to stop letting clients connect directly to OpenAI Realtime and inste
 ### Scope for Planning
 
 - Create one executable v1 plan for the media server architecture and minimal scaffolding path.
-- The plan should cover API contracts and service boundaries even if implementation changes in `../dubu-api` and `../dubu-web` are deferred or represented as integration contracts.
+- The plan should cover API contracts and service boundaries even if implementation changes in the API server and web client are deferred or represented as integration contracts.
 - The plan should keep the first vertical slice focused on audio-only client-to-SFU-to-OpenAI session establishment and Redis-backed live session state.
 
 ### Fixed Constraints
 
-- `dubu-api` owns authenticated session creation and durable state.
+- The API server owns authenticated session creation and durable state.
 - `portfoilo-media` owns all WebRTC peer connections and OpenAI Realtime connectivity.
-- Client gets `mediaServerUrl` and `mediaToken` from `dubu-api`.
+- Client gets `mediaServerUrl` and `mediaToken` from the API server.
 - Client sends SDP signaling directly to `portfoilo-media` with the media token.
 - Client media connects to `portfoilo-media`, not OpenAI Realtime.
 - v1 uses a Pion SFU room/participant/track model.
 - v1 is audio-only.
 - v1 has multiple client participants and one OpenAI agent participant per room.
-- v1 stores live media state in Redis for API lookup instead of direct media-server callbacks to `dubu-api`.
+- v1 stores live media state in Redis for API lookup instead of direct media-server callbacks to the API server.
 - Monitoring dashboard, multi-user rooms, video, recording, and clustering are non-goals for this feature.
 
 ### Success Criteria
 
-- A plan reader can see exactly how `dubu-web`, `dubu-api`, `portfoilo-media`, and OpenAI Realtime interact.
+- A plan reader can see exactly how the web client, API server, `portfoilo-media`, and OpenAI Realtime interact.
 - The media server has a clear v1 room/participant/track model that can later add monitor participants.
-- The planned implementation keeps `dubu-api` out of direct WebRTC connection management.
+- The planned implementation keeps the API server out of direct WebRTC connection management.
 - Redis live session state is part of the first media-server contract.
 - The first implementation can be validated locally with one client session, one media-token-authorized signaling request, and one OpenAI Realtime participant.
 
 ### Non-Goals
 
 - Building a full conferencing SFU.
-- Replacing `dubu-api` persistence.
+- Replacing API server persistence.
 - Exposing OpenAI credentials to browsers.
 - Implementing a production monitoring dashboard in v1.
 - Implementing media recording or playback.
@@ -192,7 +192,7 @@ Dubu needs to stop letting clients connect directly to OpenAI Realtime and inste
 - Token validation style.
 - Signaling transport style.
 - Metrics backend.
-- Exact OpenAI Realtime event subset to relay to `dubu-api` in the first slice.
+- Exact OpenAI Realtime event subset to relay to the API server in the first slice.
 
 ### Suggested Validation
 

@@ -4,9 +4,9 @@ completed_at: 2026-06-08
 
 ## Summary
 
-- Implemented the first audio-only realtime media server vertical slice for Dubu.
+- Implemented the first audio-only realtime media server vertical slice.
 - The media server now owns WebRTC peer handling, session room runtime, OpenAI Realtime call setup, Redis-backed live media state, and lifecycle cleanup.
-- `dubu-api` remains the source of truth for authenticated session creation and durable persistence; this repository exposes the media runtime and media-token-authorized signaling surface.
+- The API server remains the source of truth for authenticated session creation and durable persistence; this repository exposes the media runtime and media-token-authorized signaling surface.
 
 ## Completed Scope
 
@@ -37,7 +37,7 @@ completed_at: 2026-06-08
 
 ## Deferred
 
-- End-to-end smoke test with real `dubu-web`, `dubu-api`, Redis, browser WebRTC, and OpenAI Realtime credentials.
+- End-to-end smoke test with the real web client, API server, Redis, browser WebRTC, and OpenAI Realtime credentials.
 - Production monitoring backend or dashboard.
 - TURN production hardening and SFU node selection.
 - Horizontal SFU clustering.
