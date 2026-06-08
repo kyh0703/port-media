@@ -1,6 +1,7 @@
 package configs
 
 import (
+	"os"
 	"testing"
 )
 
@@ -66,6 +67,41 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	}
 }
 
+func TestNewConfigLoadsDotEnvFile(t *testing.T) {
+	restoreEnv(t, "NODE_ID")
+	restoreEnv(t, "OPENAI_API_KEY")
+	restoreEnv(t, "SERVER_PORT")
+	if err := os.Unsetenv("NODE_ID"); err != nil {
+		t.Fatalf("Unsetenv(NODE_ID) error = %v", err)
+	}
+	if err := os.Unsetenv("OPENAI_API_KEY"); err != nil {
+		t.Fatalf("Unsetenv(OPENAI_API_KEY) error = %v", err)
+	}
+	if err := os.Unsetenv("SERVER_PORT"); err != nil {
+		t.Fatalf("Unsetenv(SERVER_PORT) error = %v", err)
+	}
+
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.WriteFile(".env", []byte("NODE_ID=7\nOPENAI_API_KEY=dot-env-key\nSERVER_PORT=7070\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(.env) error = %v", err)
+	}
+
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error = %v", err)
+	}
+	if cfg.NodeID != 7 {
+		t.Fatalf("NodeID = %d, want 7", cfg.NodeID)
+	}
+	if cfg.OpenAI.APIKey != "dot-env-key" {
+		t.Fatalf("OpenAI.APIKey = %q, want dot-env-key", cfg.OpenAI.APIKey)
+	}
+	if cfg.Server.Port != 7070 {
+		t.Fatalf("Server.Port = %d, want 7070", cfg.Server.Port)
+	}
+}
+
 func TestNewConfigLoadsDefaults(t *testing.T) {
 	t.Setenv("NODE_ID", "1")
 	t.Setenv("OPENAI_API_KEY", "test-api-key")
@@ -106,4 +142,17 @@ func TestNewConfigRejectsNonNumericNodeID(t *testing.T) {
 	if err == nil {
 		t.Fatal("NewConfig() error is nil, want NODE_ID parse error")
 	}
+}
+
+func restoreEnv(t *testing.T, key string) {
+	t.Helper()
+
+	value, ok := os.LookupEnv(key)
+	t.Cleanup(func() {
+		if ok {
+			_ = os.Setenv(key, value)
+			return
+		}
+		_ = os.Unsetenv(key)
+	})
 }

@@ -2,7 +2,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-cmd = "go build -o ./tmp/portfoilo-media ./cmd/app"
+cmd = "go build -o ./tmp/portfoilo-media ./cmd/api"
 bin = "./tmp/portfoilo-media"
 include_ext = ["go", "yaml", "yml"]
 exclude_dir = ["tmp", "bin", ".git", ".worktrees"]

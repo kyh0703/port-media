@@ -5,9 +5,12 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/go-playground/validator/v10"
+	"github.com/joho/godotenv"
 )
 
 func NewConfig() (*Config, error) {
+	_ = godotenv.Load()
+
 	cfg, err := env.ParseAs[Config]()
 	if err != nil {
 		return nil, fmt.Errorf("parse env config: %w", err)

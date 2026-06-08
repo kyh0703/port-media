@@ -7,6 +7,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/pion/interceptor v0.1.44
 	github.com/pion/rtp v1.10.1
 	github.com/pion/webrtc/v4 v4.2.12
