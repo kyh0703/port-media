@@ -43,7 +43,7 @@ func TestBindEnvLoadsRuntimeOverrides(t *testing.T) {
 	t.Setenv("SERVER_PORT", "9090")
 	t.Setenv("LOG_DEVELOPMENT", "true")
 	t.Setenv("DATABASE_BUSY_TIMEOUT", "7s")
-	t.Setenv("REDIS_DB", "2")
+	t.Setenv("REDIS_URL", "redis://localhost:6379/2")
 	t.Setenv("MEDIA_SERVER_URL", "http://media.example.test")
 	t.Setenv("REALTIME_EVENT_HISTORY_LIMIT", "25")
 
@@ -68,8 +68,8 @@ func TestBindEnvLoadsRuntimeOverrides(t *testing.T) {
 	if cfg.Database.BusyTimeout != 7*time.Second {
 		t.Fatalf("Database.BusyTimeout = %v, want 7s", cfg.Database.BusyTimeout)
 	}
-	if cfg.Redis.DB != 2 {
-		t.Fatalf("Redis.DB = %d, want 2", cfg.Redis.DB)
+	if cfg.Redis.URL != "redis://localhost:6379/2" {
+		t.Fatalf("Redis.URL = %q, want redis://localhost:6379/2", cfg.Redis.URL)
 	}
 	if cfg.MediaServer.URL != "http://media.example.test" {
 		t.Fatalf("MediaServer.URL = %q, want http://media.example.test", cfg.MediaServer.URL)

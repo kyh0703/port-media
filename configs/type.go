@@ -3,16 +3,16 @@ package configs
 import "time"
 
 type Config struct {
-	NodeID        string              `mapstructure:"node_id" validate:"required"`
-	App           AppConfig           `mapstructure:"app"`
-	Server        ServerConfig        `mapstructure:"server"`
-	Log           LogConfig           `mapstructure:"log"`
-	OpenAI        OpenAIConfig        `mapstructure:"openai"`
-	Database      DatabaseConfig      `mapstructure:"database"`
-	Redis         RedisConfig         `mapstructure:"redis"`
-	MediaServer   MediaServerConfig   `mapstructure:"media_server"`
-	Events        EventsConfig        `mapstructure:"events"`
-	Realtime      RealtimeConfig      `mapstructure:"realtime"`
+	NodeID      string            `mapstructure:"node_id" validate:"required"`
+	App         AppConfig         `mapstructure:"app"`
+	Server      ServerConfig      `mapstructure:"server"`
+	Log         LogConfig         `mapstructure:"log"`
+	OpenAI      OpenAIConfig      `mapstructure:"openai"`
+	Database    DatabaseConfig    `mapstructure:"database"`
+	Redis       RedisConfig       `mapstructure:"redis"`
+	MediaServer MediaServerConfig `mapstructure:"media_server"`
+	Events      EventsConfig      `mapstructure:"events"`
+	Realtime    RealtimeConfig    `mapstructure:"realtime"`
 }
 
 type AppConfig struct {
@@ -57,10 +57,7 @@ type DatabaseConfig struct {
 }
 
 type RedisConfig struct {
-	Addr     string `mapstructure:"addr"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
+	URL string `mapstructure:"url"`
 }
 
 type MediaServerConfig struct {

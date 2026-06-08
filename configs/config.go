@@ -57,10 +57,7 @@ func bindEnv(v *viper.Viper) error {
 		"database.busy_timeout":                 "DATABASE_BUSY_TIMEOUT",
 		"database.max_open_conns":               "DATABASE_MAX_OPEN_CONNS",
 		"database.max_idle_conns":               "DATABASE_MAX_IDLE_CONNS",
-		"redis.addr":                            "REDIS_ADDR",
-		"redis.username":                        "REDIS_USERNAME",
-		"redis.password":                        "REDIS_PASSWORD",
-		"redis.db":                              "REDIS_DB",
+		"redis.url":                             "REDIS_URL",
 		"media_server.url":                      "MEDIA_SERVER_URL",
 		"media_server.status":                   "MEDIA_SERVER_STATUS",
 		"media_server.heartbeat_enabled":        "MEDIA_SERVER_HEARTBEAT_ENABLED",
@@ -113,8 +110,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("database.busy_timeout", "5s")
 	v.SetDefault("database.max_open_conns", 10)
 	v.SetDefault("database.max_idle_conns", 5)
-	v.SetDefault("redis.addr", "localhost:6379")
-	v.SetDefault("redis.db", 0)
+	v.SetDefault("redis.url", "redis://localhost:6379")
 	v.SetDefault("media_server.url", "")
 	v.SetDefault("media_server.status", "healthy")
 	v.SetDefault("media_server.heartbeat_enabled", true)
