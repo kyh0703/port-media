@@ -16,6 +16,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/query/session/sessionfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 )
 
@@ -606,6 +607,9 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	if len(failedEntries) != 1 {
 		t.Fatalf("room failed log entries = %d, want 1", len(failedEntries))
 	}
+	if failedEntries[0].Level != zapcore.ErrorLevel {
+		t.Fatalf("room failed log level = %s, want error", failedEntries[0].Level)
+	}
 	failed := failedEntries[0].ContextMap()
 	if failed["failure_reason"] != "critical_participant_connection_failed" {
 		t.Fatalf("failure_reason = %v, want critical_participant_connection_failed", failed["failure_reason"])
@@ -651,6 +655,9 @@ func TestServiceLogsRuntimeEventStateSaveFailures(t *testing.T) {
 	entries := logs.FilterMessage("media_session_state_save_failed").All()
 	if len(entries) != 1 {
 		t.Fatalf("state save failure logs = %d, want 1", len(entries))
+	}
+	if entries[0].Level != zapcore.ErrorLevel {
+		t.Fatalf("state save failure log level = %s, want error", entries[0].Level)
 	}
 	if entries[0].ContextMap()["operation"] != "connection_state_change" {
 		t.Fatalf("operation = %v, want connection_state_change", entries[0].ContextMap()["operation"])

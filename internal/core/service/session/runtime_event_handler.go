@@ -36,7 +36,7 @@ func (s *service) HandleDataChannelMessage(ctx context.Context, message port.Dat
 		eventType,
 		existingState.RecentRealtimeEvents,
 	)); err != nil {
-		s.logRoomEvent("media_session_state_save_failed", room,
+		s.logRoomErrorEvent("media_session_state_save_failed", room,
 			zap.String("operation", "record_realtime_event"),
 			zap.Error(err),
 		)
@@ -83,7 +83,7 @@ func (s *service) HandleConnectionStateChange(ctx context.Context, change port.C
 		return
 	}
 	if err := s.states.Save(ctx, s.project.Project(room, room.UserID, now)); err != nil {
-		s.logRoomEvent("media_session_state_save_failed", room,
+		s.logRoomErrorEvent("media_session_state_save_failed", room,
 			zap.String("operation", "connection_state_change"),
 			zap.Error(err),
 		)
@@ -125,7 +125,7 @@ func (s *service) HandleMediaTrackStateChange(ctx context.Context, change port.M
 		return
 	}
 	if err := s.states.Save(ctx, s.project.Project(room, room.UserID, now)); err != nil {
-		s.logRoomEvent("media_session_state_save_failed", room,
+		s.logRoomErrorEvent("media_session_state_save_failed", room,
 			zap.String("operation", "media_track_state_change"),
 			zap.Error(err),
 		)

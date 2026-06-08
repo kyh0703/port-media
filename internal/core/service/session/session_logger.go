@@ -16,6 +16,11 @@ func (s *service) logRoomEvent(event string, room entity.Room, fields ...zap.Fie
 	s.log.Info(event, logFields...)
 }
 
+func (s *service) logRoomErrorEvent(event string, room entity.Room, fields ...zap.Field) {
+	logFields := append(roomLogFields(room), fields...)
+	s.log.Error(event, logFields...)
+}
+
 func roomLogFields(room entity.Room) []zap.Field {
 	return []zap.Field{
 		zap.String("session_id", string(room.SessionID)),
