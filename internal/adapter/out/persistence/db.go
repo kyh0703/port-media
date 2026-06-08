@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,6 +22,10 @@ const (
 )
 
 func NewDB(cfg *configs.Config) *bun.DB {
+	if err := ensureSQLiteFileDirectory(cfg.Database.URL); err != nil {
+		panic(err)
+	}
+
 	sqldb, err := sql.Open(sqliteshim.ShimName, cfg.Database.URL)
 	if err != nil {
 		panic(err)
@@ -35,6 +41,40 @@ func NewDB(cfg *configs.Config) *bun.DB {
 
 	db := bun.NewDB(sqldb, sqlitedialect.New())
 	return db
+}
+
+func ensureSQLiteFileDirectory(dsn string) error {
+	dbPath := sqliteFilePath(dsn)
+	if dbPath == "" {
+		return nil
+	}
+
+	dir := filepath.Dir(dbPath)
+	if dir == "." || dir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create sqlite directory %s: %w", dir, err)
+	}
+	return nil
+}
+
+func sqliteFilePath(dsn string) string {
+	if dsn == "" || dsn == ":memory:" || strings.Contains(dsn, "mode=memory") {
+		return ""
+	}
+
+	path := dsn
+	if strings.HasPrefix(path, "file:") {
+		path = strings.TrimPrefix(path, "file:")
+	}
+	if beforeQuery, _, ok := strings.Cut(path, "?"); ok {
+		path = beforeQuery
+	}
+	if path == "" || strings.HasPrefix(path, ":") {
+		return ""
+	}
+	return path
 }
 
 func configureSQLite(ctx context.Context, db *sql.DB, busyTimeout time.Duration) error {

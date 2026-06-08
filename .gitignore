@@ -6,5 +6,12 @@ bin/
 tmp/
 dist/
 coverage.out
+data/
 *.test
 *.log
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

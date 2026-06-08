@@ -3,13 +3,31 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/uptrace/bun/driver/sqliteshim"
 )
+
+func TestNewDBCreatesParentDirectoryForSQLiteFile(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "data", "media.sqlite")
+	db := NewDB(&configs.Config{
+		Database: configs.DatabaseConfig{
+			URL: "file:" + dbPath + "?cache=shared",
+		},
+	})
+	defer func() {
+		_ = db.Close()
+	}()
+
+	if _, err := os.Stat(dbPath); err != nil {
+		t.Fatalf("sqlite file stat error = %v", err)
+	}
+}
 
 func TestConfigureSQLiteEnablesWALForFileDatabase(t *testing.T) {
 	sqldb := newTestSQLDBForConnection(t, "file:"+filepath.Join(t.TempDir(), "media.db")+"?cache=shared")

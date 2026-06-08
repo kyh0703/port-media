@@ -4,6 +4,7 @@ import "time"
 
 type Config struct {
 	NodeID      int               `env:"NODE_ID,required" validate:"gt=0"`
+	DBPath      string            `env:"DB_PATH" envDefault:"./data/portfoilo_media.sqlite"`
 	App         AppConfig         `envPrefix:"APP_"`
 	Server      ServerConfig      `envPrefix:"SERVER_"`
 	Log         LogConfig         `envPrefix:"LOG_"`
@@ -50,7 +51,7 @@ type OpenAIConfig struct {
 }
 
 type DatabaseConfig struct {
-	URL string `env:"URL" envDefault:"file:portfoilo_media.db?cache=shared"`
+	URL string `env:"URL"`
 }
 
 type RedisConfig struct {
