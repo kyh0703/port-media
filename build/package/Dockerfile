@@ -20,7 +20,6 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 WORKDIR /app
 
 COPY --from=build /out/portfoilo-media /app/portfoilo-media
-COPY dev.yaml ./dev.yaml
 
 EXPOSE 8080
 

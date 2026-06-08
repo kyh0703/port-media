@@ -1,10 +1,9 @@
 package configs
 
 import (
+	"strings"
 	"testing"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 func TestValidateConfigRequiresNodeID(t *testing.T) {
@@ -21,46 +20,33 @@ func TestValidateConfigAcceptsNodeID(t *testing.T) {
 	}
 }
 
-func TestBindEnvLoadsNodeID(t *testing.T) {
+func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	t.Setenv("NODE_ID", "node-a")
-
-	v := viper.New()
-	if err := bindEnv(v); err != nil {
-		t.Fatalf("bindEnv() error = %v", err)
-	}
-
-	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
-		t.Fatalf("Unmarshal() error = %v", err)
-	}
-	if cfg.NodeID != "node-a" {
-		t.Fatalf("NodeID = %q, want node-a", cfg.NodeID)
-	}
-}
-
-func TestBindEnvLoadsRuntimeOverrides(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-api-key")
 	t.Setenv("SERVER_PORT", "9090")
+	t.Setenv("SERVER_CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
 	t.Setenv("LOG_DEVELOPMENT", "true")
 	t.Setenv("DATABASE_BUSY_TIMEOUT", "7s")
 	t.Setenv("REDIS_URL", "redis://localhost:6379/2")
 	t.Setenv("MEDIA_SERVER_URL", "http://media.example.test")
+	t.Setenv("REALTIME_STUN_URLS", "stun:one.example.test:19302,stun:two.example.test:19302")
 	t.Setenv("REALTIME_EVENT_HISTORY_LIMIT", "25")
 
-	v := viper.New()
-	if err := bindEnv(v); err != nil {
-		t.Fatalf("bindEnv() error = %v", err)
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error = %v", err)
 	}
-
-	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
-		t.Fatalf("Unmarshal() error = %v", err)
+	if cfg.NodeID != "node-a" {
+		t.Fatalf("NodeID = %q, want node-a", cfg.NodeID)
 	}
 	if cfg.OpenAI.APIKey != "test-api-key" {
 		t.Fatalf("OpenAI.APIKey = %q, want test-api-key", cfg.OpenAI.APIKey)
 	}
 	if cfg.Server.Port != 9090 {
 		t.Fatalf("Server.Port = %d, want 9090", cfg.Server.Port)
+	}
+	if len(cfg.Server.CORS.AllowedOrigins) != 2 || cfg.Server.CORS.AllowedOrigins[1] != "http://localhost:5173" {
+		t.Fatalf("AllowedOrigins = %#v, want local origins", cfg.Server.CORS.AllowedOrigins)
 	}
 	if !cfg.Log.Development {
 		t.Fatal("Log.Development = false, want true")
@@ -74,16 +60,45 @@ func TestBindEnvLoadsRuntimeOverrides(t *testing.T) {
 	if cfg.MediaServer.URL != "http://media.example.test" {
 		t.Fatalf("MediaServer.URL = %q, want http://media.example.test", cfg.MediaServer.URL)
 	}
+	if len(cfg.Realtime.STUNURLs) != 2 || cfg.Realtime.STUNURLs[0] != "stun:one.example.test:19302" {
+		t.Fatalf("STUNURLs = %#v, want env STUN URLs", cfg.Realtime.STUNURLs)
+	}
 	if cfg.Realtime.RealtimeEventHistoryLimit != 25 {
 		t.Fatalf("RealtimeEventHistoryLimit = %d, want 25", cfg.Realtime.RealtimeEventHistoryLimit)
 	}
 }
 
-func TestNewVarsReadsAPPProfile(t *testing.T) {
-	t.Setenv("APP_PROFILE", "prod")
+func TestNewConfigLoadsDefaults(t *testing.T) {
+	t.Setenv("NODE_ID", "node-a")
+	t.Setenv("OPENAI_API_KEY", "test-api-key")
 
-	vars := NewVars()
-	if vars.Profile != "prod" {
-		t.Fatalf("Profile = %q, want prod", vars.Profile)
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error = %v", err)
+	}
+	if cfg.App.Name != "portfoilo-media" {
+		t.Fatalf("App.Name = %q, want portfoilo-media", cfg.App.Name)
+	}
+	if cfg.Server.Port != 8080 {
+		t.Fatalf("Server.Port = %d, want 8080", cfg.Server.Port)
+	}
+	if len(cfg.Server.CORS.AllowedOrigins) != 1 || cfg.Server.CORS.AllowedOrigins[0] != "*" {
+		t.Fatalf("AllowedOrigins = %#v, want wildcard default", cfg.Server.CORS.AllowedOrigins)
+	}
+	if cfg.Redis.URL != "redis://localhost:6379" {
+		t.Fatalf("Redis.URL = %q, want redis://localhost:6379", cfg.Redis.URL)
+	}
+}
+
+func TestNewConfigRejectsMissingRequiredEnv(t *testing.T) {
+	t.Setenv("NODE_ID", "")
+	t.Setenv("OPENAI_API_KEY", "")
+
+	_, err := NewConfig()
+	if err == nil {
+		t.Fatal("NewConfig() error is nil, want required env error")
+	}
+	if !strings.Contains(err.Error(), "NODE_ID") {
+		t.Fatalf("NewConfig() error = %v, want NODE_ID error", err)
 	}
 }

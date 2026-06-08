@@ -3,81 +3,81 @@ package configs
 import "time"
 
 type Config struct {
-	NodeID      string            `mapstructure:"node_id" validate:"required"`
-	App         AppConfig         `mapstructure:"app"`
-	Server      ServerConfig      `mapstructure:"server"`
-	Log         LogConfig         `mapstructure:"log"`
-	OpenAI      OpenAIConfig      `mapstructure:"openai"`
-	Database    DatabaseConfig    `mapstructure:"database"`
-	Redis       RedisConfig       `mapstructure:"redis"`
-	MediaServer MediaServerConfig `mapstructure:"media_server"`
-	Events      EventsConfig      `mapstructure:"events"`
-	Realtime    RealtimeConfig    `mapstructure:"realtime"`
+	NodeID      string            `env:"NODE_ID,notEmpty" validate:"required"`
+	App         AppConfig         `envPrefix:"APP_"`
+	Server      ServerConfig      `envPrefix:"SERVER_"`
+	Log         LogConfig         `envPrefix:"LOG_"`
+	OpenAI      OpenAIConfig      `envPrefix:"OPENAI_"`
+	Database    DatabaseConfig    `envPrefix:"DATABASE_"`
+	Redis       RedisConfig       `envPrefix:"REDIS_"`
+	MediaServer MediaServerConfig `envPrefix:"MEDIA_SERVER_"`
+	Events      EventsConfig      `envPrefix:"EVENTS_"`
+	Realtime    RealtimeConfig    `envPrefix:"REALTIME_"`
 }
 
 type AppConfig struct {
-	Name    string `mapstructure:"name"`
-	Env     string `mapstructure:"env"`
-	Version string `mapstructure:"version"`
+	Name    string `env:"NAME" envDefault:"portfoilo-media"`
+	Env     string `env:"ENV" envDefault:"dev"`
+	Version string `env:"VERSION" envDefault:"0.1.0"`
 }
 
 type ServerConfig struct {
-	Host         string        `mapstructure:"host"`
-	Port         int           `mapstructure:"port"`
-	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout time.Duration `mapstructure:"write_timeout"`
-	CORS         CORSConfig    `mapstructure:"cors"`
+	Host         string        `env:"HOST" envDefault:"0.0.0.0"`
+	Port         int           `env:"PORT" envDefault:"8080"`
+	ReadTimeout  time.Duration `env:"READ_TIMEOUT" envDefault:"10s"`
+	WriteTimeout time.Duration `env:"WRITE_TIMEOUT" envDefault:"10s"`
+	CORS         CORSConfig    `envPrefix:"CORS_"`
 }
 
 type CORSConfig struct {
-	AllowedOrigins []string `mapstructure:"allowed_origins"`
-	AllowedMethods []string `mapstructure:"allowed_methods"`
-	AllowedHeaders []string `mapstructure:"allowed_headers"`
-	ExposeHeaders  []string `mapstructure:"expose_headers"`
+	AllowedOrigins []string `env:"ALLOWED_ORIGINS" envDefault:"*"`
+	AllowedMethods []string `env:"ALLOWED_METHODS" envDefault:"GET,POST,OPTIONS"`
+	AllowedHeaders []string `env:"ALLOWED_HEADERS" envDefault:"Authorization,Content-Type"`
+	ExposeHeaders  []string `env:"EXPOSE_HEADERS" envDefault:"X-Room-Id,X-Participant-Id"`
 }
 
 type LogConfig struct {
-	Level       string `mapstructure:"level"`
-	Development bool   `mapstructure:"development"`
+	Level       string `env:"LEVEL" envDefault:"info"`
+	Development bool   `env:"DEVELOPMENT" envDefault:"false"`
 }
 
 type OpenAIConfig struct {
-	RealtimeBaseURL          string   `mapstructure:"realtime_base_url"`
-	RealtimeModel            string   `mapstructure:"realtime_model"`
-	RealtimeDataChannelLabel string   `mapstructure:"realtime_data_channel_label"`
-	RealtimeInitialEvents    []string `mapstructure:"realtime_initial_events"`
-	APIKey                   string   `mapstructure:"api_key"`
+	RealtimeBaseURL          string   `env:"REALTIME_BASE_URL" envDefault:"https://api.openai.com"`
+	RealtimeModel            string   `env:"REALTIME_MODEL" envDefault:"gpt-realtime-2"`
+	RealtimeDataChannelLabel string   `env:"REALTIME_DATA_CHANNEL_LABEL" envDefault:"oai-events"`
+	RealtimeInitialEvents    []string `env:"REALTIME_INITIAL_EVENTS"`
+	APIKey                   string   `env:"API_KEY,notEmpty"`
 }
 
 type DatabaseConfig struct {
-	DSN          string        `mapstructure:"dsn"`
-	BusyTimeout  time.Duration `mapstructure:"busy_timeout"`
-	MaxOpenConns int           `mapstructure:"max_open_conns"`
-	MaxIdleConns int           `mapstructure:"max_idle_conns"`
+	DSN          string        `env:"DSN" envDefault:"file:portfoilo_media.db?cache=shared"`
+	BusyTimeout  time.Duration `env:"BUSY_TIMEOUT" envDefault:"5s"`
+	MaxOpenConns int           `env:"MAX_OPEN_CONNS" envDefault:"10"`
+	MaxIdleConns int           `env:"MAX_IDLE_CONNS" envDefault:"5"`
 }
 
 type RedisConfig struct {
-	URL string `mapstructure:"url"`
+	URL string `env:"URL" envDefault:"redis://localhost:6379"`
 }
 
 type MediaServerConfig struct {
-	URL               string        `mapstructure:"url"`
-	Status            string        `mapstructure:"status"`
-	HeartbeatEnabled  bool          `mapstructure:"heartbeat_enabled"`
-	HeartbeatInterval time.Duration `mapstructure:"heartbeat_interval"`
-	HeartbeatTTL      time.Duration `mapstructure:"heartbeat_ttl"`
-	MaxSessions       int           `mapstructure:"max_sessions"`
+	URL               string        `env:"URL"`
+	Status            string        `env:"STATUS" envDefault:"healthy"`
+	HeartbeatEnabled  bool          `env:"HEARTBEAT_ENABLED" envDefault:"true"`
+	HeartbeatInterval time.Duration `env:"HEARTBEAT_INTERVAL" envDefault:"10s"`
+	HeartbeatTTL      time.Duration `env:"HEARTBEAT_TTL" envDefault:"30s"`
+	MaxSessions       int           `env:"MAX_SESSIONS" envDefault:"0"`
 }
 
 type EventsConfig struct {
-	ConversationStreamEnabled bool   `mapstructure:"conversation_stream_enabled"`
-	ConversationStreamName    string `mapstructure:"conversation_stream_name"`
-	ConversationStreamMaxLen  int64  `mapstructure:"conversation_stream_max_len"`
+	ConversationStreamEnabled bool   `env:"CONVERSATION_STREAM_ENABLED" envDefault:"true"`
+	ConversationStreamName    string `env:"CONVERSATION_STREAM_NAME" envDefault:"media:conversation-events:v1"`
+	ConversationStreamMaxLen  int64  `env:"CONVERSATION_STREAM_MAX_LEN" envDefault:"0"`
 }
 
 type RealtimeConfig struct {
-	STUNURLs                  []string      `mapstructure:"stun_urls"`
-	RoomIdleTimeout           time.Duration `mapstructure:"room_idle_timeout"`
-	ICEGatheringTimeout       time.Duration `mapstructure:"ice_gathering_timeout"`
-	RealtimeEventHistoryLimit int           `mapstructure:"realtime_event_history_limit"`
+	STUNURLs                  []string      `env:"STUN_URLS" envDefault:"stun:stun.l.google.com:19302"`
+	RoomIdleTimeout           time.Duration `env:"ROOM_IDLE_TIMEOUT" envDefault:"2m"`
+	ICEGatheringTimeout       time.Duration `env:"ICE_GATHERING_TIMEOUT" envDefault:"5s"`
+	RealtimeEventHistoryLimit int           `env:"EVENT_HISTORY_LIMIT" envDefault:"10"`
 }
