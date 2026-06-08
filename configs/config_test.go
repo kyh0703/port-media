@@ -2,7 +2,6 @@ package configs
 
 import (
 	"testing"
-	"time"
 )
 
 func TestValidateConfigRequiresNodeID(t *testing.T) {
@@ -25,7 +24,7 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	t.Setenv("SERVER_PORT", "9090")
 	t.Setenv("SERVER_CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
 	t.Setenv("LOG_DEVELOPMENT", "true")
-	t.Setenv("DATABASE_BUSY_TIMEOUT", "7s")
+	t.Setenv("DATABASE_URL", "file:test.db?cache=shared")
 	t.Setenv("REDIS_URL", "redis://localhost:6379/2")
 	t.Setenv("MEDIA_SERVER_URL", "http://media.example.test")
 	t.Setenv("REALTIME_STUN_URLS", "stun:one.example.test:19302,stun:two.example.test:19302")
@@ -50,8 +49,8 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	if !cfg.Log.Development {
 		t.Fatal("Log.Development = false, want true")
 	}
-	if cfg.Database.BusyTimeout != 7*time.Second {
-		t.Fatalf("Database.BusyTimeout = %v, want 7s", cfg.Database.BusyTimeout)
+	if cfg.Database.URL != "file:test.db?cache=shared" {
+		t.Fatalf("Database.URL = %q, want file:test.db?cache=shared", cfg.Database.URL)
 	}
 	if cfg.Redis.URL != "redis://localhost:6379/2" {
 		t.Fatalf("Redis.URL = %q, want redis://localhost:6379/2", cfg.Redis.URL)

@@ -13,17 +13,23 @@ import (
 	"github.com/uptrace/bun/driver/sqliteshim"
 )
 
+const (
+	defaultDatabaseBusyTimeout = 5 * time.Second
+	defaultDatabaseMaxOpenConn = 10
+	defaultDatabaseMaxIdleConn = 5
+)
+
 func NewDB(cfg *configs.Config) *bun.DB {
-	sqldb, err := sql.Open(sqliteshim.ShimName, cfg.Database.DSN)
+	sqldb, err := sql.Open(sqliteshim.ShimName, cfg.Database.URL)
 	if err != nil {
 		panic(err)
 	}
 
-	sqldb.SetMaxOpenConns(cfg.Database.MaxOpenConns)
-	sqldb.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	sqldb.SetMaxOpenConns(defaultDatabaseMaxOpenConn)
+	sqldb.SetMaxIdleConns(defaultDatabaseMaxIdleConn)
 
 	ctx := context.Background()
-	if err := configureSQLite(ctx, sqldb, cfg.Database.BusyTimeout); err != nil {
+	if err := configureSQLite(ctx, sqldb, defaultDatabaseBusyTimeout); err != nil {
 		panic(err)
 	}
 

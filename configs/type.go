@@ -50,10 +50,7 @@ type OpenAIConfig struct {
 }
 
 type DatabaseConfig struct {
-	DSN          string        `env:"DSN" envDefault:"file:portfoilo_media.db?cache=shared"`
-	BusyTimeout  time.Duration `env:"BUSY_TIMEOUT" envDefault:"5s"`
-	MaxOpenConns int           `env:"MAX_OPEN_CONNS" envDefault:"10"`
-	MaxIdleConns int           `env:"MAX_IDLE_CONNS" envDefault:"5"`
+	URL string `env:"URL" envDefault:"file:portfoilo_media.db?cache=shared"`
 }
 
 type RedisConfig struct {
