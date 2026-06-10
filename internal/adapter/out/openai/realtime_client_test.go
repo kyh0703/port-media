@@ -15,6 +15,7 @@ func TestRealtimeClientCreatesCallFromSDP(t *testing.T) {
 	var receivedSession map[string]any
 	var receivedSDP string
 	var receivedAuth string
+	offerSDP := "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/realtime/calls" {
@@ -44,7 +45,7 @@ func TestRealtimeClientCreatesCallFromSDP(t *testing.T) {
 		},
 	})
 
-	result, err := client.CreateCall(t.Context(), CreateCallInput{SDPOffer: "offer-sdp"})
+	result, err := client.CreateCall(t.Context(), CreateCallInput{SDPOffer: offerSDP})
 	if err != nil {
 		t.Fatalf("CreateCall() error = %v", err)
 	}
@@ -58,8 +59,8 @@ func TestRealtimeClientCreatesCallFromSDP(t *testing.T) {
 	if receivedAuth != "Bearer test-key" {
 		t.Fatalf("Authorization = %q, want Bearer test-key", receivedAuth)
 	}
-	if receivedSDP != "offer-sdp" {
-		t.Fatalf("sdp = %q, want offer-sdp", receivedSDP)
+	if receivedSDP != offerSDP {
+		t.Fatalf("sdp = %q, want exact SDP %q", receivedSDP, offerSDP)
 	}
 	if receivedSession["type"] != "realtime" {
 		t.Fatalf("session.type = %v, want realtime", receivedSession["type"])

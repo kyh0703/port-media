@@ -59,14 +59,13 @@ func NewRealtimeClient(cfg *configs.Config) *RealtimeClient {
 }
 
 func (c *RealtimeClient) CreateCall(ctx context.Context, input CreateCallInput) (CreateCallResult, error) {
-	sdpOffer := strings.TrimSpace(input.SDPOffer)
-	if sdpOffer == "" {
+	if strings.TrimSpace(input.SDPOffer) == "" {
 		return CreateCallResult{}, fmt.Errorf("create realtime call: empty SDP offer")
 	}
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	if err := writer.WriteField("sdp", sdpOffer); err != nil {
+	if err := writer.WriteField("sdp", input.SDPOffer); err != nil {
 		return CreateCallResult{}, fmt.Errorf("write sdp field: %w", err)
 	}
 
