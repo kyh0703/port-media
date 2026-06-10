@@ -20,5 +20,10 @@ func NewLogger(cfg *configs.Config) (*zap.Logger, error) {
 	}
 
 	zapCfg.Level = zap.NewAtomicLevelAt(level)
+	zapCfg.InitialFields = map[string]any{
+		"service": cfg.App.Name,
+		"env":     cfg.App.Env,
+		"version": cfg.App.Version,
+	}
 	return zapCfg.Build()
 }

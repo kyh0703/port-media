@@ -33,8 +33,8 @@ type ServerConfig struct {
 type CORSConfig struct {
 	AllowedOrigins []string `env:"ALLOWED_ORIGINS" envDefault:"*"`
 	AllowedMethods []string `env:"ALLOWED_METHODS" envDefault:"GET,POST,OPTIONS"`
-	AllowedHeaders []string `env:"ALLOWED_HEADERS" envDefault:"Authorization,Content-Type"`
-	ExposeHeaders  []string `env:"EXPOSE_HEADERS" envDefault:"X-Room-Id,X-Participant-Id"`
+	AllowedHeaders []string `env:"ALLOWED_HEADERS" envDefault:"Authorization,Content-Type,X-Request-Id"`
+	ExposeHeaders  []string `env:"EXPOSE_HEADERS" envDefault:"X-Room-Id,X-Participant-Id,X-Request-Id"`
 }
 
 type LogConfig struct {

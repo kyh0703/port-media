@@ -18,6 +18,7 @@ import (
 	rtc "github.com/kyh0703/portfoilo-media/internal/adapter/out/webrtc"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	pkg "github.com/kyh0703/portfoilo-media/internal/pkg"
+	"github.com/kyh0703/portfoilo-media/internal/pkg/constant"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -141,6 +142,9 @@ func TestNewHTTPHandlerHandlesCORSPreflightForJoin(t *testing.T) {
 	}
 	if got := res.Header.Get("Access-Control-Allow-Headers"); got == "" {
 		t.Fatal("Access-Control-Allow-Headers is empty")
+	}
+	if got := res.Header.Get(constant.HeaderRequestID); got == "" {
+		t.Fatalf("%s is empty", constant.HeaderRequestID)
 	}
 }
 

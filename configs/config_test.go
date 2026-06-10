@@ -122,6 +122,12 @@ func TestNewConfigLoadsDefaults(t *testing.T) {
 	if len(cfg.Server.CORS.AllowedOrigins) != 1 || cfg.Server.CORS.AllowedOrigins[0] != "*" {
 		t.Fatalf("AllowedOrigins = %#v, want wildcard default", cfg.Server.CORS.AllowedOrigins)
 	}
+	if !containsString(cfg.Server.CORS.AllowedHeaders, "X-Request-Id") {
+		t.Fatalf("AllowedHeaders = %#v, want X-Request-Id", cfg.Server.CORS.AllowedHeaders)
+	}
+	if !containsString(cfg.Server.CORS.ExposeHeaders, "X-Request-Id") {
+		t.Fatalf("ExposeHeaders = %#v, want X-Request-Id", cfg.Server.CORS.ExposeHeaders)
+	}
 	if cfg.Redis.URL != "redis://localhost:6379" {
 		t.Fatalf("Redis.URL = %q, want redis://localhost:6379", cfg.Redis.URL)
 	}
@@ -179,4 +185,13 @@ func restoreEnv(t *testing.T, key string) {
 		}
 		_ = os.Unsetenv(key)
 	})
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

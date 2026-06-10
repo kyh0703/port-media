@@ -36,10 +36,10 @@ func NewHTTPHandler(params HTTPParams) http.Handler {
 	if params.Recover != nil {
 		app = params.Recover.Handler(app)
 	}
+	app = middleware.CORS(params.Config.Server.CORS)(app)
 	if params.RequestLogger != nil {
 		app = params.RequestLogger.Handler(app)
 	}
-	app = middleware.CORS(params.Config.Server.CORS)(app)
 
 	return app
 }

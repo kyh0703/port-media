@@ -56,8 +56,11 @@ func (m *RecoverMiddleware) Handler(next http.Handler) http.Handler {
 			m.log.Error("http_panic_recovered",
 				zap.Any("panic", recovered),
 				zap.ByteString("stack", stack),
+				zap.String("request_id", requestIDFromRequest(r)),
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
+				zap.String("remote_ip", remoteIP(r)),
+				zap.String("user_agent", r.UserAgent()),
 			)
 
 			if rec.wroteHeader {
