@@ -27,6 +27,11 @@ type testHandler struct{}
 
 type panicHandler struct{}
 
+type pathInspectHandler struct {
+	seenPath      string
+	seenSessionID string
+}
+
 type appFakeSessionUsecases struct {
 	stats sessiondto.RuntimeStatsResponse
 	err   error
@@ -98,6 +103,21 @@ func (panicHandler) Table() []handler.Mapper {
 				_ = w
 				_ = r
 				panic("boom")
+			},
+		},
+	}
+}
+
+func (h *pathInspectHandler) Table() []handler.Mapper {
+	return []handler.Mapper{
+		{
+			Method: http.MethodPost,
+			Path:   "/sessions/{sessionId}/join",
+			Handler: func(w http.ResponseWriter, r *http.Request) error {
+				h.seenPath = r.URL.Path
+				h.seenSessionID = r.PathValue("sessionId")
+				w.WriteHeader(http.StatusNoContent)
+				return nil
 			},
 		},
 	}
@@ -205,6 +225,34 @@ func TestNewHTTPHandlerExposesJoinResponseHeaders(t *testing.T) {
 	}
 	if !strings.Contains(joined, "X-Participant-Id") {
 		t.Fatalf("Access-Control-Expose-Headers = %q, want X-Participant-Id", joined)
+	}
+}
+
+func TestNewHTTPHandlerStripsAPIV1Prefix(t *testing.T) {
+	inspect := &pathInspectHandler{}
+	app := NewHTTPHandler(HTTPParams{
+		Config: &configs.Config{
+			App:    configs.AppConfig{Name: "test"},
+			Server: configs.ServerConfig{},
+		},
+		Logger:        zap.NewNop(),
+		RequestLogger: middleware.NewRequestLogger(zap.NewNop()),
+		Handlers:      []handler.Handler{inspect},
+	})
+
+	res := serve(app, httptest.NewRequest(http.MethodPost, "/api/v1/sessions/session-1/join", nil))
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusNoContent)
+	}
+	if inspect.seenPath != "/sessions/session-1/join" {
+		t.Fatalf("path = %q, want /sessions/session-1/join", inspect.seenPath)
+	}
+	if inspect.seenSessionID != "session-1" {
+		t.Fatalf("sessionId = %q, want session-1", inspect.seenSessionID)
 	}
 }
 

@@ -24,15 +24,18 @@ type HTTPParams struct {
 }
 
 func NewHTTPHandler(params HTTPParams) http.Handler {
-	mux := http.NewServeMux()
+	api := http.NewServeMux()
 	handleError := exception.NewHTTPErrorHandler(params.Logger)
 	for _, h := range params.Handlers {
 		for _, route := range h.Table() {
-			mux.Handle(routePattern(apiV1Prefix, route), middleware.WithErrorHandler(route.Handler, handleError))
+			api.Handle(routePattern(route), middleware.WithErrorHandler(route.Handler, handleError))
 		}
 	}
 
-	var app http.Handler = mux
+	root := http.NewServeMux()
+	root.Handle(apiV1Prefix+"/", http.StripPrefix(apiV1Prefix, api))
+
+	var app http.Handler = root
 	if params.Recover != nil {
 		app = params.Recover.Handler(app)
 	}
@@ -44,6 +47,6 @@ func NewHTTPHandler(params HTTPParams) http.Handler {
 	return app
 }
 
-func routePattern(prefix string, route handler.Mapper) string {
-	return route.Method + " " + prefix + route.Path
+func routePattern(route handler.Mapper) string {
+	return route.Method + " " + route.Path
 }
