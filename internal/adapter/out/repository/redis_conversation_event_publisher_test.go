@@ -7,8 +7,8 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/kyh0703/portfoilo-media/configs"
-	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
+	"github.com/kyh0703/portfoilo-media/internal/core/port"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -30,16 +30,20 @@ func TestRedisConversationEventPublisherWritesStreamEntry(t *testing.T) {
 	})
 	occurredAt := time.Date(2026, 5, 19, 10, 1, 2, 3, time.UTC)
 
-	err = publisher.Publish(context.Background(), entity.ConversationEvent{
-		SchemaVersion:     1,
-		EventID:           "evt_123",
-		ConversationID:    vo.ConversationID("conversation-1"),
-		SessionID:         vo.SessionID("session-1"),
-		RoomID:            vo.RoomID("room-1"),
-		ProviderCallID:    "rtc_123",
-		ProviderEventType: "response.output_text.done",
-		OccurredAt:        occurredAt,
-		Payload:           `{"type":"response.output_text.done","text":"hello"}`,
+	err = publisher.Publish(context.Background(), port.ConversationEvent{
+		SchemaVersion:          1,
+		EventID:                "evt_123",
+		ConversationID:         vo.ConversationID("conversation-1"),
+		SessionID:              vo.SessionID("session-1"),
+		RoomID:                 vo.RoomID("room-1"),
+		ProviderCallID:         "rtc_123",
+		Type:                   "assistant.output_text.completed",
+		ProviderEventType:      "response.output_text.done",
+		ProviderItemID:         "item-2",
+		PreviousProviderItemID: "item-1",
+		ProviderRespID:         "resp-1",
+		OccurredAt:             occurredAt,
+		Payload:                `{"type":"response.output_text.done","text":"hello"}`,
 	})
 	if err != nil {
 		t.Fatalf("Publish() error = %v", err)
@@ -60,7 +64,11 @@ func TestRedisConversationEventPublisherWritesStreamEntry(t *testing.T) {
 	assertStreamField(t, fields, "session_id", "session-1")
 	assertStreamField(t, fields, "room_id", "room-1")
 	assertStreamField(t, fields, "provider_call_id", "rtc_123")
+	assertStreamField(t, fields, "event_type", "assistant.output_text.completed")
 	assertStreamField(t, fields, "provider_event_type", "response.output_text.done")
+	assertStreamField(t, fields, "provider_item_id", "item-2")
+	assertStreamField(t, fields, "previous_provider_item_id", "item-1")
+	assertStreamField(t, fields, "provider_response_id", "resp-1")
 	assertStreamField(t, fields, "occurred_at", occurredAt.Format(time.RFC3339Nano))
 	assertStreamField(t, fields, "payload", `{"type":"response.output_text.done","text":"hello"}`)
 }
@@ -82,7 +90,7 @@ func TestConversationEventPublisherDisabledIsNoop(t *testing.T) {
 		},
 	})
 
-	err = publisher.Publish(context.Background(), entity.ConversationEvent{
+	err = publisher.Publish(context.Background(), port.ConversationEvent{
 		SchemaVersion:     1,
 		EventID:           "evt_123",
 		ConversationID:    vo.ConversationID("conversation-1"),

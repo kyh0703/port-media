@@ -32,20 +32,20 @@ type Service interface {
 }
 
 type service struct {
-	records   repository.MediaSessionRecordRepository
-	runtime   repository.RoomRuntimeRepository
-	states    sessionquery.MediaSessionStateRepository
-	media     port.MediaGateway
-	provider  port.RealtimeProvider
-	events    repository.ConversationEventPublisher
-	log       *zap.Logger
-	now       func() time.Time
-	locks     sync.Map
-	realtime  realtimeControlConfig
-	project   mediaSessionProjector
-	stats     roomStatsQuery
-	eventsIn  realtimeEventPolicy
-	eventsOut conversationEventMapper
+	records      repository.MediaSessionRecordRepository
+	runtime      repository.RoomRuntimeRepository
+	states       sessionquery.MediaSessionStateRepository
+	media        port.MediaGateway
+	provider     port.RealtimeProvider
+	events       port.ConversationEventPublisher
+	log          *zap.Logger
+	now          func() time.Time
+	locks        sync.Map
+	realtime     realtimeControlConfig
+	project      mediaSessionProjector
+	stats        roomStatsQuery
+	eventsIn     port.ProviderEventNormalizer
+	eventBuilder conversationEventBuilder
 }
 
 type realtimeControlConfig struct {
@@ -67,7 +67,7 @@ func NewService(
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
 ) Service {
-	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.NewNop())
+	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, nil, defaultRealtimeControlConfig(), zap.NewNop())
 }
 
 func NewServiceWithOptions(
@@ -78,7 +78,7 @@ func NewServiceWithOptions(
 	provider port.RealtimeProvider,
 	options ServiceOptions,
 ) Service {
-	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromOptions(options), zap.NewNop())
+	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, nil, realtimeControlConfigFromOptions(options), zap.NewNop())
 }
 
 func NewServiceWithOptionsAndLogger(
@@ -90,7 +90,7 @@ func NewServiceWithOptionsAndLogger(
 	options ServiceOptions,
 	log *zap.Logger,
 ) Service {
-	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, realtimeControlConfigFromOptions(options), log)
+	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, nil, realtimeControlConfigFromOptions(options), log)
 }
 
 func NewServiceWithOptionsLoggerAndPublisher(
@@ -99,11 +99,12 @@ func NewServiceWithOptionsLoggerAndPublisher(
 	states sessionquery.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
-	events repository.ConversationEventPublisher,
+	events port.ConversationEventPublisher,
+	eventsIn port.ProviderEventNormalizer,
 	options ServiceOptions,
 	log *zap.Logger,
 ) Service {
-	return newService(records, runtime, states, media, provider, events, realtimeControlConfigFromOptions(options), log)
+	return newService(records, runtime, states, media, provider, events, eventsIn, realtimeControlConfigFromOptions(options), log)
 }
 
 func newService(
@@ -112,7 +113,8 @@ func newService(
 	states sessionquery.MediaSessionStateRepository,
 	media port.MediaGateway,
 	provider port.RealtimeProvider,
-	events repository.ConversationEventPublisher,
+	events port.ConversationEventPublisher,
+	eventsIn port.ProviderEventNormalizer,
 	realtime realtimeControlConfig,
 	log *zap.Logger,
 ) Service {
@@ -122,21 +124,23 @@ func newService(
 	if events == nil {
 		events = noopConversationEventPublisher{}
 	}
-	realtimeEvents := realtimeEventPolicy{}
+	if eventsIn == nil {
+		eventsIn = noopProviderEventNormalizer{}
+	}
 	svc := &service{
-		records:   records,
-		runtime:   runtime,
-		states:    states,
-		media:     media,
-		provider:  provider,
-		events:    events,
-		log:       log,
-		now:       time.Now,
-		realtime:  realtime,
-		project:   mediaSessionProjector{realtimeEventHistoryLimit: realtime.realtimeEventHistoryLimit},
-		stats:     roomStatsQuery{},
-		eventsIn:  realtimeEvents,
-		eventsOut: conversationEventMapper{realtime: realtimeEvents},
+		records:      records,
+		runtime:      runtime,
+		states:       states,
+		media:        media,
+		provider:     provider,
+		events:       events,
+		log:          log,
+		now:          time.Now,
+		realtime:     realtime,
+		project:      mediaSessionProjector{realtimeEventHistoryLimit: realtime.realtimeEventHistoryLimit},
+		stats:        roomStatsQuery{},
+		eventsIn:     eventsIn,
+		eventBuilder: conversationEventBuilder{},
 	}
 	return svc
 }
@@ -480,8 +484,17 @@ func (s *service) EndSession(ctx context.Context, req sessiondto.EndSessionReque
 
 type noopConversationEventPublisher struct{}
 
-func (noopConversationEventPublisher) Publish(ctx context.Context, event entity.ConversationEvent) error {
+func (noopConversationEventPublisher) Publish(ctx context.Context, event port.ConversationEvent) error {
 	_ = ctx
 	_ = event
 	return nil
+}
+
+type noopProviderEventNormalizer struct{}
+
+func (noopProviderEventNormalizer) Normalize(payload string) port.ConversationSignal {
+	return port.ConversationSignal{
+		Type:    port.ConversationEventTypeUnknown,
+		Payload: payload,
+	}
 }

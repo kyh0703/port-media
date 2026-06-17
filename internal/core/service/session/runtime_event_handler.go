@@ -19,8 +19,8 @@ func (s *service) HandleDataChannelMessage(ctx context.Context, message port.Dat
 	if err != nil || !found {
 		return
 	}
-	eventType := s.eventsIn.Type(message.Payload)
-	room.RecordRealtimeEvent(eventType, now)
+	signal := s.eventsIn.Normalize(message.Payload)
+	room.RecordRealtimeEvent(string(signal.Type), now)
 
 	if err := s.runtime.Save(ctx, room); err != nil {
 		return
@@ -33,7 +33,7 @@ func (s *service) HandleDataChannelMessage(ctx context.Context, message port.Dat
 		room,
 		room.UserID,
 		now,
-		eventType,
+		string(signal.Type),
 		existingState.RecentRealtimeEvents,
 	)); err != nil {
 		s.logRoomErrorEvent("media_session_state_save_failed", room,
@@ -41,12 +41,13 @@ func (s *service) HandleDataChannelMessage(ctx context.Context, message port.Dat
 			zap.Error(err),
 		)
 	}
-	s.publishConversationEvent(ctx, room, eventType, message.Payload, now)
+	s.publishConversationEvent(ctx, room, signal, now)
 	s.logRoomEvent("media_realtime_event_recorded", room,
 		zap.String("participant_id", string(message.ParticipantID)),
 		zap.String("participant_role", string(message.Role)),
 		zap.String("data_channel_label", message.Label),
-		zap.String("realtime_event_type", eventType),
+		zap.String("realtime_event_type", string(signal.Type)),
+		zap.String("provider_event_type", string(signal.ProviderEventType)),
 	)
 }
 
@@ -135,11 +136,10 @@ func (s *service) HandleMediaTrackStateChange(ctx context.Context, change port.M
 func (s *service) publishConversationEvent(
 	ctx context.Context,
 	room entity.Room,
-	eventType string,
-	payload string,
+	signal port.ConversationSignal,
 	occurredAt time.Time,
 ) {
-	event, ok := s.eventsOut.Map(room, eventType, payload, occurredAt)
+	event, ok := s.eventBuilder.Build(room, signal, occurredAt)
 	if !ok {
 		return
 	}
@@ -151,7 +151,8 @@ func (s *service) publishConversationEvent(
 			zap.String("conversation_id", string(event.ConversationID)),
 			zap.String("room_id", string(event.RoomID)),
 			zap.String("provider_call_id", event.ProviderCallID),
-			zap.String("provider_event_type", event.ProviderEventType),
+			zap.String("event_type", string(event.Type)),
+			zap.String("provider_event_type", string(event.ProviderEventType)),
 		)
 	}
 }

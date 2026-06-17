@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/configs"
-	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
-	domainrepo "github.com/kyh0703/portfoilo-media/internal/core/domain/repository"
+	"github.com/kyh0703/portfoilo-media/internal/core/port"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -22,7 +21,7 @@ type RedisConversationEventPublisher struct {
 
 type NoopConversationEventPublisher struct{}
 
-func NewConversationEventPublisher(client *redis.Client, cfg *configs.Config) domainrepo.ConversationEventPublisher {
+func NewConversationEventPublisher(client *redis.Client, cfg *configs.Config) port.ConversationEventPublisher {
 	if cfg != nil && !cfg.Events.ConversationStreamEnabled {
 		return NoopConversationEventPublisher{}
 	}
@@ -43,7 +42,7 @@ func NewConversationEventPublisher(client *redis.Client, cfg *configs.Config) do
 	}
 }
 
-func (p *RedisConversationEventPublisher) Publish(ctx context.Context, event entity.ConversationEvent) error {
+func (p *RedisConversationEventPublisher) Publish(ctx context.Context, event port.ConversationEvent) error {
 	args := &redis.XAddArgs{
 		Stream: p.stream,
 		Values: []any{
@@ -53,7 +52,11 @@ func (p *RedisConversationEventPublisher) Publish(ctx context.Context, event ent
 			"session_id", string(event.SessionID),
 			"room_id", string(event.RoomID),
 			"provider_call_id", event.ProviderCallID,
-			"provider_event_type", event.ProviderEventType,
+			"event_type", string(event.Type),
+			"provider_event_type", string(event.ProviderEventType),
+			"provider_item_id", event.ProviderItemID,
+			"previous_provider_item_id", event.PreviousProviderItemID,
+			"provider_response_id", event.ProviderRespID,
 			"occurred_at", event.OccurredAt.UTC().Format(time.RFC3339Nano),
 			"payload", event.Payload,
 		},
@@ -69,7 +72,7 @@ func (p *RedisConversationEventPublisher) Publish(ctx context.Context, event ent
 	return nil
 }
 
-func (NoopConversationEventPublisher) Publish(ctx context.Context, event entity.ConversationEvent) error {
+func (NoopConversationEventPublisher) Publish(ctx context.Context, event port.ConversationEvent) error {
 	_ = ctx
 	_ = event
 	return nil

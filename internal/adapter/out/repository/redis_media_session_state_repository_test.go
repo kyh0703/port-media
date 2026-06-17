@@ -9,6 +9,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/kyh0703/portfoilo-media/configs"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
+	"github.com/kyh0703/portfoilo-media/internal/core/port"
 	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
 	"github.com/redis/go-redis/v9"
 )
@@ -46,11 +47,11 @@ func TestRedisMediaSessionStateRepositorySavesStateWithTTL(t *testing.T) {
 				Tracks:          1,
 			},
 		},
-		LastRealtimeEventType: "response.done",
+		LastRealtimeEventType: string(port.ConversationEventTypeAssistantRespCompleted),
 		LastRealtimeEventAt:   lastActiveAt,
 		RecentRealtimeEvents: []sessionquery.RealtimeEvent{
-			{Type: "session.updated", At: startedAt},
-			{Type: "response.done", At: lastActiveAt},
+			{Type: string(port.ConversationEventTypeSessionProviderUpdated), At: startedAt},
+			{Type: string(port.ConversationEventTypeAssistantRespCompleted), At: lastActiveAt},
 		},
 		StartedAt: startedAt,
 		UpdatedAt: lastActiveAt,
@@ -95,8 +96,8 @@ func TestRedisMediaSessionStateRepositorySavesStateWithTTL(t *testing.T) {
 	if participant["audio_mode"] != "publisher" {
 		t.Fatalf("participant audio_mode = %v, want publisher", participant["audio_mode"])
 	}
-	if payload["last_realtime_event_type"] != "response.done" {
-		t.Fatalf("last_realtime_event_type = %v, want response.done", payload["last_realtime_event_type"])
+	if payload["last_realtime_event_type"] != string(port.ConversationEventTypeAssistantRespCompleted) {
+		t.Fatalf("last_realtime_event_type = %v, want %s", payload["last_realtime_event_type"], port.ConversationEventTypeAssistantRespCompleted)
 	}
 	if payload["last_realtime_event_at"] != lastActiveAt.Format(time.RFC3339Nano) {
 		t.Fatalf("last_realtime_event_at = %v, want %s", payload["last_realtime_event_at"], lastActiveAt.Format(time.RFC3339Nano))
@@ -109,8 +110,8 @@ func TestRedisMediaSessionStateRepositorySavesStateWithTTL(t *testing.T) {
 	if !ok {
 		t.Fatalf("recent realtime event = %#v, want object", realtimeEvents[1])
 	}
-	if lastRealtimeEvent["type"] != "response.done" {
-		t.Fatalf("recent realtime event type = %v, want response.done", lastRealtimeEvent["type"])
+	if lastRealtimeEvent["type"] != string(port.ConversationEventTypeAssistantRespCompleted) {
+		t.Fatalf("recent realtime event type = %v, want %s", lastRealtimeEvent["type"], port.ConversationEventTypeAssistantRespCompleted)
 	}
 	if server.TTL("media:session:session-1") != 2*time.Minute {
 		t.Fatalf("ttl = %v, want 2m", server.TTL("media:session:session-1"))
@@ -150,10 +151,10 @@ func TestRedisMediaSessionStateRepositoryFindsState(t *testing.T) {
 				Tracks:          1,
 			},
 		},
-		LastRealtimeEventType: "session.updated",
+		LastRealtimeEventType: string(port.ConversationEventTypeSessionProviderUpdated),
 		LastRealtimeEventAt:   updatedAt,
 		RecentRealtimeEvents: []sessionquery.RealtimeEvent{
-			{Type: "session.updated", At: updatedAt},
+			{Type: string(port.ConversationEventTypeSessionProviderUpdated), At: updatedAt},
 		},
 		StartedAt: startedAt,
 		UpdatedAt: updatedAt,
@@ -181,8 +182,8 @@ func TestRedisMediaSessionStateRepositoryFindsState(t *testing.T) {
 	if state.ParticipantStates[0].AudioMode != "listener" {
 		t.Fatalf("AudioMode = %q, want listener", state.ParticipantStates[0].AudioMode)
 	}
-	if state.LastRealtimeEventType != "session.updated" {
-		t.Fatalf("LastRealtimeEventType = %q, want session.updated", state.LastRealtimeEventType)
+	if state.LastRealtimeEventType != string(port.ConversationEventTypeSessionProviderUpdated) {
+		t.Fatalf("LastRealtimeEventType = %q, want %s", state.LastRealtimeEventType, port.ConversationEventTypeSessionProviderUpdated)
 	}
 	if state.LastRealtimeEventAt != updatedAt {
 		t.Fatalf("LastRealtimeEventAt = %v, want %v", state.LastRealtimeEventAt, updatedAt)
@@ -190,7 +191,7 @@ func TestRedisMediaSessionStateRepositoryFindsState(t *testing.T) {
 	if len(state.RecentRealtimeEvents) != 1 {
 		t.Fatalf("RecentRealtimeEvents len = %d, want 1", len(state.RecentRealtimeEvents))
 	}
-	if state.RecentRealtimeEvents[0].Type != "session.updated" {
-		t.Fatalf("RecentRealtimeEvents[0].Type = %q, want session.updated", state.RecentRealtimeEvents[0].Type)
+	if state.RecentRealtimeEvents[0].Type != string(port.ConversationEventTypeSessionProviderUpdated) {
+		t.Fatalf("RecentRealtimeEvents[0].Type = %q, want %s", state.RecentRealtimeEvents[0].Type, port.ConversationEventTypeSessionProviderUpdated)
 	}
 }

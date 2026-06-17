@@ -2,16 +2,15 @@ package session
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
-	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository/repositoryfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
+	"github.com/kyh0703/portfoilo-media/internal/core/port/portfakes"
 	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/query/session/sessionfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
@@ -29,6 +28,26 @@ func createSessionForTest(t *testing.T, svc Service) {
 	if err != nil {
 		t.Fatalf("CreateSession() error = %v", err)
 	}
+}
+
+func providerEventPayload(eventType string) string {
+	return "provider-event:" + eventType
+}
+
+type fakeProviderEventNormalizer struct {
+	signal  port.ConversationSignal
+	signals map[string]port.ConversationSignal
+}
+
+func (f fakeProviderEventNormalizer) Normalize(payload string) port.ConversationSignal {
+	signal, ok := f.signals[payload]
+	if !ok {
+		signal = f.signal
+	}
+	if signal.Payload == "" {
+		signal.Payload = payload
+	}
+	return signal
 }
 
 func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
@@ -546,7 +565,7 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 		return sessionquery.MediaSessionState{}, false, nil
 	})
 	core, observed := observer.New(zap.InfoLevel)
-	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.New(core))
+	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, noopProviderEventNormalizer{}, defaultRealtimeControlConfig(), zap.New(core))
 	createSessionForTest(t, svc)
 
 	res, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
@@ -631,7 +650,7 @@ func TestServiceLogsRuntimeEventStateSaveFailures(t *testing.T) {
 	states := &sessionfakes.FakeMediaSessionStateRepository{}
 	states.SaveReturnsOnCall(1, errors.New("state store unavailable"))
 	observed, logs := observer.New(zap.InfoLevel)
-	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, defaultRealtimeControlConfig(), zap.New(observed))
+	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, noopProviderEventNormalizer{}, defaultRealtimeControlConfig(), zap.New(observed))
 	createSessionForTest(t, svc)
 
 	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
@@ -858,7 +877,12 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 		}
 		return sessionquery.MediaSessionState{}, false, nil
 	})
-	svc := NewService(records, runtime, states, media, provider)
+	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, fakeProviderEventNormalizer{
+		signal: port.ConversationSignal{
+			Type:              port.ConversationEventTypeAssistantRespCompleted,
+			ProviderEventType: port.ProviderEventType("provider.response.completed"),
+		},
+	}, defaultRealtimeControlConfig(), zap.NewNop())
 	createSessionForTest(t, svc)
 
 	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
@@ -884,8 +908,8 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 		t.Fatalf("state saves = %d, want 2", states.SaveCallCount())
 	}
 	_, state := states.SaveArgsForCall(1)
-	if state.LastRealtimeEventType != "response.done" {
-		t.Fatalf("LastRealtimeEventType = %q, want response.done", state.LastRealtimeEventType)
+	if state.LastRealtimeEventType != "assistant.response.completed" {
+		t.Fatalf("LastRealtimeEventType = %q, want assistant.response.completed", state.LastRealtimeEventType)
 	}
 	if state.LastRealtimeEventAt.IsZero() {
 		t.Fatal("LastRealtimeEventAt is zero")
@@ -893,8 +917,8 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	if len(state.RecentRealtimeEvents) != 1 {
 		t.Fatalf("RecentRealtimeEvents len = %d, want 1", len(state.RecentRealtimeEvents))
 	}
-	if state.RecentRealtimeEvents[0].Type != "response.done" {
-		t.Fatalf("RecentRealtimeEvents[0].Type = %q, want response.done", state.RecentRealtimeEvents[0].Type)
+	if state.RecentRealtimeEvents[0].Type != "assistant.response.completed" {
+		t.Fatalf("RecentRealtimeEvents[0].Type = %q, want assistant.response.completed", state.RecentRealtimeEvents[0].Type)
 	}
 
 	status, found, err := svc.GetSessionStatus(context.Background(), sessiondto.GetSessionStatusRequest{
@@ -906,8 +930,8 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	if !found {
 		t.Fatal("found = false, want true")
 	}
-	if status.LastRealtimeEventType != "response.done" {
-		t.Fatalf("status LastRealtimeEventType = %q, want response.done", status.LastRealtimeEventType)
+	if status.LastRealtimeEventType != "assistant.response.completed" {
+		t.Fatalf("status LastRealtimeEventType = %q, want assistant.response.completed", status.LastRealtimeEventType)
 	}
 	if status.LastRealtimeEventAt.IsZero() {
 		t.Fatal("status LastRealtimeEventAt is zero")
@@ -915,8 +939,8 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	if len(status.RecentRealtimeEvents) != 1 {
 		t.Fatalf("status RecentRealtimeEvents len = %d, want 1", len(status.RecentRealtimeEvents))
 	}
-	if status.RecentRealtimeEvents[0].Type != "response.done" {
-		t.Fatalf("status RecentRealtimeEvents[0].Type = %q, want response.done", status.RecentRealtimeEvents[0].Type)
+	if status.RecentRealtimeEvents[0].Type != "assistant.response.completed" {
+		t.Fatalf("status RecentRealtimeEvents[0].Type = %q, want assistant.response.completed", status.RecentRealtimeEvents[0].Type)
 	}
 }
 
@@ -940,7 +964,7 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 		}
 		return sessionquery.MediaSessionState{}, false, nil
 	})
-	publisher := &repositoryfakes.FakeConversationEventPublisher{}
+	publisher := &portfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithOptionsLoggerAndPublisher(
 		records,
 		runtime,
@@ -948,6 +972,17 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 		media,
 		provider,
 		publisher,
+		fakeProviderEventNormalizer{
+			signal: port.ConversationSignal{
+				Type:              port.ConversationEventTypeSpeechInputTranscriptCompleted,
+				ProviderEventType: port.ProviderEventType("provider.input_transcript.completed"),
+				ProviderEventID:   "evt_1",
+				ProviderItemID:    "item-1",
+				ProviderRespID:    "resp-1",
+				Payload:           `{"text":"hello"}`,
+				Publishable:       true,
+			},
+		},
 		ServiceOptions{},
 		zap.NewNop(),
 	)
@@ -969,7 +1004,7 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
 		Label:         createdInput.DataChannelLabel,
-		Payload:       `{"type":"conversation.item.input_audio_transcription.completed","event_id":"evt_1","transcript":"hello","token":"drop","nested":{"authorization":"drop","value":"keep"}}`,
+		Payload:       `provider raw payload`,
 	})
 
 	if publisher.PublishCallCount() != 1 {
@@ -994,32 +1029,200 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 	if event.ProviderCallID != "rtc_123" {
 		t.Fatalf("ProviderCallID = %q, want rtc_123", event.ProviderCallID)
 	}
-	if event.ProviderEventType != "conversation.item.input_audio_transcription.completed" {
+	if event.Type != "speech.input_transcript.completed" {
+		t.Fatalf("Type = %q, want speech.input_transcript.completed", event.Type)
+	}
+	if event.ProviderEventType != "provider.input_transcript.completed" {
 		t.Fatalf("ProviderEventType = %q", event.ProviderEventType)
+	}
+	if event.ProviderItemID != "item-1" {
+		t.Fatalf("ProviderItemID = %q, want item-1", event.ProviderItemID)
+	}
+	if event.PreviousProviderItemID != "" {
+		t.Fatalf("PreviousProviderItemID = %q, want empty", event.PreviousProviderItemID)
+	}
+	if event.ProviderRespID != "resp-1" {
+		t.Fatalf("ProviderRespID = %q, want resp-1", event.ProviderRespID)
 	}
 	if event.OccurredAt.IsZero() {
 		t.Fatal("OccurredAt is zero")
 	}
 
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
-		t.Fatalf("payload Unmarshal() error = %v", err)
+	if event.Payload != `{"text":"hello"}` {
+		t.Fatalf("Payload = %q, want normalized payload", event.Payload)
 	}
-	if payload["transcript"] != "hello" {
-		t.Fatalf("payload transcript = %v, want hello", payload["transcript"])
+}
+
+func TestServicePublishesConversationEventsWithProviderItemLinksAsReceived(t *testing.T) {
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
+	media := &fakeMediaGateway{}
+	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&port.Peer{}, nil)
+	provider := &fakeRealtimeProvider{}
+	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionquery.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return sessionquery.MediaSessionState{}, false, nil
+	})
+	publisher := &portfakes.FakeConversationEventPublisher{}
+	secondPayload := `provider raw second`
+	firstPayload := `provider raw first`
+	svc := NewServiceWithOptionsLoggerAndPublisher(
+		records,
+		runtime,
+		states,
+		media,
+		provider,
+		publisher,
+		fakeProviderEventNormalizer{
+			signals: map[string]port.ConversationSignal{
+				secondPayload: {
+					Type:                   port.ConversationEventTypeSpeechInputTranscriptCompleted,
+					ProviderEventType:      port.ProviderEventType("provider.input_transcript.completed"),
+					ProviderEventID:        "evt_2",
+					ProviderItemID:         "item-2",
+					PreviousProviderItemID: "item-1",
+					Payload:                secondPayload,
+					Publishable:            true,
+				},
+				firstPayload: {
+					Type:              port.ConversationEventTypeSpeechInputTranscriptCompleted,
+					ProviderEventType: port.ProviderEventType("provider.input_transcript.completed"),
+					ProviderEventID:   "evt_1",
+					ProviderItemID:    "item-1",
+					Payload:           firstPayload,
+					Publishable:       true,
+				},
+			},
+		},
+		ServiceOptions{},
+		zap.NewNop(),
+	)
+	createSessionForTest(t, svc)
+
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err != nil {
+		t.Fatalf("JoinSession() error = %v", err)
 	}
-	if _, ok := payload["token"]; ok {
-		t.Fatal("payload token was not removed")
+
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
+		Label:         createdInput.DataChannelLabel,
+		Payload:       secondPayload,
+	})
+	svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
+		Label:         createdInput.DataChannelLabel,
+		Payload:       firstPayload,
+	})
+
+	if publisher.PublishCallCount() != 2 {
+		t.Fatalf("published events = %d, want 2", publisher.PublishCallCount())
 	}
-	nested, ok := payload["nested"].(map[string]any)
-	if !ok {
-		t.Fatalf("payload nested = %#v, want object", payload["nested"])
+	_, first := publisher.PublishArgsForCall(0)
+	_, second := publisher.PublishArgsForCall(1)
+	if first.ProviderItemID != "item-2" || first.PreviousProviderItemID != "item-1" {
+		t.Fatalf("first provider item link = %q <- %q, want item-2 <- item-1", first.ProviderItemID, first.PreviousProviderItemID)
 	}
-	if _, ok := nested["authorization"]; ok {
-		t.Fatal("payload nested authorization was not removed")
+	if second.ProviderItemID != "item-1" || second.PreviousProviderItemID != "" {
+		t.Fatalf("second provider item link = %q <- %q, want item-1 <- empty", second.ProviderItemID, second.PreviousProviderItemID)
 	}
-	if nested["value"] != "keep" {
-		t.Fatalf("payload nested value = %v, want keep", nested["value"])
+}
+
+func TestServiceBuildsConversationEventFromInjectedProviderNormalizer(t *testing.T) {
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
+	media := &fakeMediaGateway{}
+	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&port.Peer{}, nil)
+	provider := &fakeRealtimeProvider{}
+	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDCalls(func(ctx context.Context, sessionID vo.SessionID) (sessionquery.MediaSessionState, bool, error) {
+		_ = ctx
+		for i := states.SaveCallCount() - 1; i >= 0; i-- {
+			_, state := states.SaveArgsForCall(i)
+			if state.SessionID == sessionID {
+				return state, true, nil
+			}
+		}
+		return sessionquery.MediaSessionState{}, false, nil
+	})
+	publisher := &portfakes.FakeConversationEventPublisher{}
+	eventsIn := fakeProviderEventNormalizer{
+		signal: port.ConversationSignal{
+			Type:              port.ConversationEventTypeSpeechInputTranscriptCompleted,
+			ProviderEventType: port.ProviderEventType("stt.segment.completed"),
+			ProviderEventID:   "stt-event-1",
+			ProviderItemID:    "stt-item-1",
+			Payload:           `{"text":"hello from stt"}`,
+			Publishable:       true,
+		},
+	}
+	svc := NewServiceWithOptionsLoggerAndPublisher(
+		records,
+		runtime,
+		states,
+		media,
+		provider,
+		publisher,
+		eventsIn,
+		ServiceOptions{},
+		zap.NewNop(),
+	)
+	createSessionForTest(t, svc)
+
+	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err != nil {
+		t.Fatalf("JoinSession() error = %v", err)
+	}
+
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
+		SessionID:     createdInput.SessionID,
+		ParticipantID: createdInput.ParticipantID,
+		Role:          createdInput.Role,
+		Label:         createdInput.DataChannelLabel,
+		Payload:       `stt-provider-raw-payload`,
+	})
+
+	if publisher.PublishCallCount() != 1 {
+		t.Fatalf("published events = %d, want 1", publisher.PublishCallCount())
+	}
+	_, event := publisher.PublishArgsForCall(0)
+	if event.ProviderEventType != port.ProviderEventType("stt.segment.completed") {
+		t.Fatalf("ProviderEventType = %q, want stt.segment.completed", event.ProviderEventType)
+	}
+	if event.Type != port.ConversationEventTypeSpeechInputTranscriptCompleted {
+		t.Fatalf("Type = %q, want %s", event.Type, port.ConversationEventTypeSpeechInputTranscriptCompleted)
+	}
+	if event.ProviderItemID != "stt-item-1" {
+		t.Fatalf("ProviderItemID = %q, want stt-item-1", event.ProviderItemID)
 	}
 }
 
@@ -1043,7 +1246,7 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 		}
 		return sessionquery.MediaSessionState{}, false, nil
 	})
-	publisher := &repositoryfakes.FakeConversationEventPublisher{}
+	publisher := &portfakes.FakeConversationEventPublisher{}
 	svc := NewServiceWithOptionsLoggerAndPublisher(
 		records,
 		runtime,
@@ -1051,6 +1254,13 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 		media,
 		provider,
 		publisher,
+		fakeProviderEventNormalizer{
+			signal: port.ConversationSignal{
+				Type:              port.ConversationEventTypeSessionProviderCreated,
+				ProviderEventType: port.ProviderEventType("provider.session.created"),
+				Publishable:       false,
+			},
+		},
 		ServiceOptions{},
 		zap.NewNop(),
 	)
@@ -1072,7 +1282,7 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
 		Label:         createdInput.DataChannelLabel,
-		Payload:       `{"type":"session.created"}`,
+		Payload:       providerEventPayload("session.created"),
 	})
 
 	if publisher.PublishCallCount() != 0 {
@@ -1082,8 +1292,8 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 		t.Fatalf("state saves = %d, want 2", states.SaveCallCount())
 	}
 	_, state := states.SaveArgsForCall(1)
-	if state.LastRealtimeEventType != "session.created" {
-		t.Fatalf("LastRealtimeEventType = %q, want session.created", state.LastRealtimeEventType)
+	if state.LastRealtimeEventType != string(port.ConversationEventTypeSessionProviderCreated) {
+		t.Fatalf("LastRealtimeEventType = %q, want %s", state.LastRealtimeEventType, port.ConversationEventTypeSessionProviderCreated)
 	}
 }
 
@@ -1107,7 +1317,8 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 		}
 		return sessionquery.MediaSessionState{}, false, nil
 	})
-	publisher := &repositoryfakes.FakeConversationEventPublisher{}
+	publisher := &portfakes.FakeConversationEventPublisher{}
+	payload := `provider output text completed`
 	svc := NewServiceWithOptionsLoggerAndPublisher(
 		records,
 		runtime,
@@ -1115,6 +1326,14 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 		media,
 		provider,
 		publisher,
+		fakeProviderEventNormalizer{
+			signal: port.ConversationSignal{
+				Type:              port.ConversationEventTypeAssistantOutputTextCompleted,
+				ProviderEventType: port.ProviderEventType("provider.output_text.completed"),
+				Payload:           payload,
+				Publishable:       true,
+			},
+		},
 		ServiceOptions{},
 		zap.NewNop(),
 	)
@@ -1136,7 +1355,7 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
 		Label:         createdInput.DataChannelLabel,
-		Payload:       `{"type":"response.output_text.done","text":"hello"}`,
+		Payload:       payload,
 	}
 	svc.(*service).HandleDataChannelMessage(context.Background(), message)
 	svc.(*service).HandleDataChannelMessage(context.Background(), message)
@@ -1174,7 +1393,7 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 		}
 		return sessionquery.MediaSessionState{}, false, nil
 	})
-	publisher := &repositoryfakes.FakeConversationEventPublisher{}
+	publisher := &portfakes.FakeConversationEventPublisher{}
 	publisher.PublishReturns(errors.New("publish failed"))
 	observed, logs := observer.New(zap.WarnLevel)
 	svc := NewServiceWithOptionsLoggerAndPublisher(
@@ -1184,6 +1403,14 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 		media,
 		provider,
 		publisher,
+		fakeProviderEventNormalizer{
+			signal: port.ConversationSignal{
+				Type:              port.ConversationEventTypeAssistantOutputTextCompleted,
+				ProviderEventType: port.ProviderEventType("provider.output_text.completed"),
+				Payload:           `{"text":"hello"}`,
+				Publishable:       true,
+			},
+		},
 		ServiceOptions{},
 		zap.New(observed),
 	)
@@ -1205,7 +1432,7 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 		ParticipantID: createdInput.ParticipantID,
 		Role:          createdInput.Role,
 		Label:         createdInput.DataChannelLabel,
-		Payload:       `{"type":"response.output_text.done","text":"hello"}`,
+		Payload:       `provider output text completed`,
 	})
 
 	if publisher.PublishCallCount() != 1 {
@@ -1215,8 +1442,8 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 		t.Fatalf("state saves = %d, want 2", states.SaveCallCount())
 	}
 	_, state := states.SaveArgsForCall(1)
-	if state.LastRealtimeEventType != "response.output_text.done" {
-		t.Fatalf("LastRealtimeEventType = %q, want response.output_text.done", state.LastRealtimeEventType)
+	if state.LastRealtimeEventType != string(port.ConversationEventTypeAssistantOutputTextCompleted) {
+		t.Fatalf("LastRealtimeEventType = %q, want %s", state.LastRealtimeEventType, port.ConversationEventTypeAssistantOutputTextCompleted)
 	}
 	if logs.FilterMessage("media_conversation_event_publish_failed").Len() != 1 {
 		t.Fatalf("publish failure logs = %d, want 1", logs.FilterMessage("media_conversation_event_publish_failed").Len())
@@ -1243,7 +1470,22 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 		}
 		return sessionquery.MediaSessionState{}, false, nil
 	})
-	svc := NewServiceWithOptions(records, runtime, states, media, provider, ServiceOptions{RealtimeEventHistoryLimit: 2})
+	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, fakeProviderEventNormalizer{
+		signals: map[string]port.ConversationSignal{
+			providerEventPayload("session.created"): {
+				Type:              port.ConversationEventTypeSessionProviderCreated,
+				ProviderEventType: port.ProviderEventType("provider.session.created"),
+			},
+			providerEventPayload("response.created"): {
+				Type:              port.ConversationEventTypeAssistantRespCreated,
+				ProviderEventType: port.ProviderEventType("provider.response.created"),
+			},
+			providerEventPayload("response.done"): {
+				Type:              port.ConversationEventTypeAssistantRespCompleted,
+				ProviderEventType: port.ProviderEventType("provider.response.completed"),
+			},
+		},
+	}, realtimeControlConfigFromOptions(ServiceOptions{RealtimeEventHistoryLimit: 2}), zap.NewNop())
 	createSessionForTest(t, svc)
 
 	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
@@ -1257,13 +1499,17 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	for _, eventType := range []string{"session.created", "response.created", "response.done"} {
+	for _, eventType := range []string{
+		"session.created",
+		"response.created",
+		"response.done",
+	} {
 		svc.(*service).HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
 			SessionID:     createdInput.SessionID,
 			ParticipantID: createdInput.ParticipantID,
 			Role:          createdInput.Role,
 			Label:         createdInput.DataChannelLabel,
-			Payload:       `{"type":"` + eventType + `"}`,
+			Payload:       providerEventPayload(eventType),
 		})
 	}
 
@@ -1271,20 +1517,11 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 	if len(state.RecentRealtimeEvents) != 2 {
 		t.Fatalf("RecentRealtimeEvents len = %d, want 2", len(state.RecentRealtimeEvents))
 	}
-	if state.RecentRealtimeEvents[0].Type != "response.created" {
-		t.Fatalf("RecentRealtimeEvents[0].Type = %q, want response.created", state.RecentRealtimeEvents[0].Type)
+	if state.RecentRealtimeEvents[0].Type != string(port.ConversationEventTypeAssistantRespCreated) {
+		t.Fatalf("RecentRealtimeEvents[0].Type = %q, want %s", state.RecentRealtimeEvents[0].Type, port.ConversationEventTypeAssistantRespCreated)
 	}
-	if state.RecentRealtimeEvents[1].Type != "response.done" {
-		t.Fatalf("RecentRealtimeEvents[1].Type = %q, want response.done", state.RecentRealtimeEvents[1].Type)
-	}
-}
-
-func TestRealtimeEventTypeFallsBackToUnknown(t *testing.T) {
-	if got := realtimeEventType(`{"event":"missing"}`); got != "unknown" {
-		t.Fatalf("realtimeEventType() = %q, want unknown", got)
-	}
-	if got := realtimeEventType(`not-json`); got != "unknown" {
-		t.Fatalf("realtimeEventType() invalid = %q, want unknown", got)
+	if state.RecentRealtimeEvents[1].Type != string(port.ConversationEventTypeAssistantRespCompleted) {
+		t.Fatalf("RecentRealtimeEvents[1].Type = %q, want %s", state.RecentRealtimeEvents[1].Type, port.ConversationEventTypeAssistantRespCompleted)
 	}
 }
 
@@ -2346,7 +2583,12 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 		}
 		return sessionquery.MediaSessionState{}, false, nil
 	})
-	svc := NewService(records, runtime, states, media, provider)
+	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, fakeProviderEventNormalizer{
+		signal: port.ConversationSignal{
+			Type:              port.ConversationEventTypeAssistantRespCompleted,
+			ProviderEventType: port.ProviderEventType("provider.response.completed"),
+		},
+	}, defaultRealtimeControlConfig(), zap.NewNop())
 	createSessionForTest(t, svc)
 
 	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
@@ -2419,8 +2661,8 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 	if stats.ByAudioMode[string(sessiondto.AudioModePublisher)] != 1 {
 		t.Fatalf("publisher count = %d, want 1", stats.ByAudioMode[string(sessiondto.AudioModePublisher)])
 	}
-	if stats.ByRealtimeEvent["response.done"] != 1 {
-		t.Fatalf("response.done count = %d, want 1", stats.ByRealtimeEvent["response.done"])
+	if stats.ByRealtimeEvent["assistant.response.completed"] != 1 {
+		t.Fatalf("assistant.response.completed count = %d, want 1", stats.ByRealtimeEvent["assistant.response.completed"])
 	}
 	if len(stats.RoomsDetail) != 1 {
 		t.Fatalf("RoomsDetail len = %d, want 1", len(stats.RoomsDetail))
@@ -2431,8 +2673,8 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 	if stats.RoomsDetail[0].Listeners != 0 {
 		t.Fatalf("room listeners = %d, want 0", stats.RoomsDetail[0].Listeners)
 	}
-	if stats.RoomsDetail[0].LastRealtimeEventType != "response.done" {
-		t.Fatalf("room last realtime event = %q, want response.done", stats.RoomsDetail[0].LastRealtimeEventType)
+	if stats.RoomsDetail[0].LastRealtimeEventType != "assistant.response.completed" {
+		t.Fatalf("room last realtime event = %q, want assistant.response.completed", stats.RoomsDetail[0].LastRealtimeEventType)
 	}
 	if stats.RoomsDetail[0].LastRealtimeEventAt == "" {
 		t.Fatal("room last realtime event at is empty")
