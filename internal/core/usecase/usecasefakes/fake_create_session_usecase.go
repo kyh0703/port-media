@@ -5,35 +5,35 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 type FakeCreateSessionUsecase struct {
-	CreateSessionStub        func(context.Context, session.CreateSessionRequest) (session.CreateSessionResponse, error)
+	CreateSessionStub        func(context.Context, sessionio.CreateSessionRequest) (sessionio.CreateSessionResponse, error)
 	createSessionMutex       sync.RWMutex
 	createSessionArgsForCall []struct {
 		arg1 context.Context
-		arg2 session.CreateSessionRequest
+		arg2 sessionio.CreateSessionRequest
 	}
 	createSessionReturns struct {
-		result1 session.CreateSessionResponse
+		result1 sessionio.CreateSessionResponse
 		result2 error
 	}
 	createSessionReturnsOnCall map[int]struct {
-		result1 session.CreateSessionResponse
+		result1 sessionio.CreateSessionResponse
 		result2 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeCreateSessionUsecase) CreateSession(arg1 context.Context, arg2 session.CreateSessionRequest) (session.CreateSessionResponse, error) {
+func (fake *FakeCreateSessionUsecase) CreateSession(arg1 context.Context, arg2 sessionio.CreateSessionRequest) (sessionio.CreateSessionResponse, error) {
 	fake.createSessionMutex.Lock()
 	ret, specificReturn := fake.createSessionReturnsOnCall[len(fake.createSessionArgsForCall)]
 	fake.createSessionArgsForCall = append(fake.createSessionArgsForCall, struct {
 		arg1 context.Context
-		arg2 session.CreateSessionRequest
+		arg2 sessionio.CreateSessionRequest
 	}{arg1, arg2})
 	stub := fake.CreateSessionStub
 	fakeReturns := fake.createSessionReturns
@@ -54,41 +54,41 @@ func (fake *FakeCreateSessionUsecase) CreateSessionCallCount() int {
 	return len(fake.createSessionArgsForCall)
 }
 
-func (fake *FakeCreateSessionUsecase) CreateSessionCalls(stub func(context.Context, session.CreateSessionRequest) (session.CreateSessionResponse, error)) {
+func (fake *FakeCreateSessionUsecase) CreateSessionCalls(stub func(context.Context, sessionio.CreateSessionRequest) (sessionio.CreateSessionResponse, error)) {
 	fake.createSessionMutex.Lock()
 	defer fake.createSessionMutex.Unlock()
 	fake.CreateSessionStub = stub
 }
 
-func (fake *FakeCreateSessionUsecase) CreateSessionArgsForCall(i int) (context.Context, session.CreateSessionRequest) {
+func (fake *FakeCreateSessionUsecase) CreateSessionArgsForCall(i int) (context.Context, sessionio.CreateSessionRequest) {
 	fake.createSessionMutex.RLock()
 	defer fake.createSessionMutex.RUnlock()
 	argsForCall := fake.createSessionArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeCreateSessionUsecase) CreateSessionReturns(result1 session.CreateSessionResponse, result2 error) {
+func (fake *FakeCreateSessionUsecase) CreateSessionReturns(result1 sessionio.CreateSessionResponse, result2 error) {
 	fake.createSessionMutex.Lock()
 	defer fake.createSessionMutex.Unlock()
 	fake.CreateSessionStub = nil
 	fake.createSessionReturns = struct {
-		result1 session.CreateSessionResponse
+		result1 sessionio.CreateSessionResponse
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *FakeCreateSessionUsecase) CreateSessionReturnsOnCall(i int, result1 session.CreateSessionResponse, result2 error) {
+func (fake *FakeCreateSessionUsecase) CreateSessionReturnsOnCall(i int, result1 sessionio.CreateSessionResponse, result2 error) {
 	fake.createSessionMutex.Lock()
 	defer fake.createSessionMutex.Unlock()
 	fake.CreateSessionStub = nil
 	if fake.createSessionReturnsOnCall == nil {
 		fake.createSessionReturnsOnCall = make(map[int]struct {
-			result1 session.CreateSessionResponse
+			result1 sessionio.CreateSessionResponse
 			result2 error
 		})
 	}
 	fake.createSessionReturnsOnCall[i] = struct {
-		result1 session.CreateSessionResponse
+		result1 sessionio.CreateSessionResponse
 		result2 error
 	}{result1, result2}
 }

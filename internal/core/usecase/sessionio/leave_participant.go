@@ -1,4 +1,4 @@
-package session
+package sessionio
 
 type LeaveParticipantRequest struct {
 	SessionID      string

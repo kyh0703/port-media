@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 func TestMediaServerStateReporterReportsRuntimeState(t *testing.T) {
 	states := &fakeMediaServerStateRepository{}
 	reporter := NewMediaServerStateReporter(states, fakeStateReporterService{
-		stats: sessiondto.RuntimeStatsResponse{
+		stats: sessionio.RuntimeStatsResponse{
 			Rooms:        2,
 			Sessions:     2,
 			Participants: 5,
@@ -87,19 +87,19 @@ func (f *fakeMediaServerStateRepository) SaveOffline(ctx context.Context, state 
 }
 
 type fakeStateReporterService struct {
-	stats sessiondto.RuntimeStatsResponse
+	stats sessionio.RuntimeStatsResponse
 }
 
-func (f fakeStateReporterService) CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error) {
-	return sessiondto.CreateSessionResponse{}, nil
+func (f fakeStateReporterService) CreateSession(ctx context.Context, req sessionio.CreateSessionRequest) (sessionio.CreateSessionResponse, error) {
+	return sessionio.CreateSessionResponse{}, nil
 }
 
-func (f fakeStateReporterService) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
-	return sessiondto.LeaveParticipantResponse{}, nil
+func (f fakeStateReporterService) LeaveParticipant(ctx context.Context, req sessionio.LeaveParticipantRequest) (sessionio.LeaveParticipantResponse, error) {
+	return sessionio.LeaveParticipantResponse{}, nil
 }
 
-func (f fakeStateReporterService) EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error) {
-	return sessiondto.EndSessionResponse{}, nil
+func (f fakeStateReporterService) EndSession(ctx context.Context, req sessionio.EndSessionRequest) (sessionio.EndSessionResponse, error) {
+	return sessionio.EndSessionResponse{}, nil
 }
 
 func (f fakeStateReporterService) CleanupIdleRooms(ctx context.Context, idleTimeout time.Duration) (int, error) {
@@ -110,11 +110,11 @@ func (f fakeStateReporterService) ShutdownActiveRooms(ctx context.Context) (int,
 	return 0, nil
 }
 
-func (f fakeStateReporterService) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResult, bool, error) {
-	return sessiondto.GetSessionStatusResult{}, false, nil
+func (f fakeStateReporterService) GetSessionStatus(ctx context.Context, req sessionio.GetSessionStatusRequest) (sessionio.GetSessionStatusResult, bool, error) {
+	return sessionio.GetSessionStatusResult{}, false, nil
 }
 
-func (f fakeStateReporterService) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
+func (f fakeStateReporterService) GetRuntimeStats(ctx context.Context) (sessionio.RuntimeStatsResponse, error) {
 	return f.stats, nil
 }
 

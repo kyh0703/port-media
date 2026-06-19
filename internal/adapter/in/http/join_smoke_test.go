@@ -16,11 +16,11 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository/repositoryfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
 	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/query/session/sessionfakes"
 	sessionservice "github.com/kyh0703/portfoilo-media/internal/core/service/session"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 	pionwebrtc "github.com/pion/webrtc/v4"
 )
 
@@ -40,7 +40,7 @@ func TestJoinEndpointSmokeWithPionClient(t *testing.T) {
 	states := newSmokeMediaSessionStateRepository()
 	provider := newSmokeRealtimeProvider(t)
 	svc := sessionservice.NewService(records, runtime, states, rtc.NewGateway(media), provider)
-	if _, err := svc.CreateSession(context.Background(), sessiondto.CreateSessionRequest{
+	if _, err := svc.CreateSession(context.Background(), sessionio.CreateSessionRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 	}); err != nil {

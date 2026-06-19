@@ -5,35 +5,35 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 type FakeJoinSessionUsecase struct {
-	JoinSessionStub        func(context.Context, session.JoinSessionCommand) (session.JoinSessionResult, error)
+	JoinSessionStub        func(context.Context, sessionio.JoinSessionCommand) (sessionio.JoinSessionResult, error)
 	joinSessionMutex       sync.RWMutex
 	joinSessionArgsForCall []struct {
 		arg1 context.Context
-		arg2 session.JoinSessionCommand
+		arg2 sessionio.JoinSessionCommand
 	}
 	joinSessionReturns struct {
-		result1 session.JoinSessionResult
+		result1 sessionio.JoinSessionResult
 		result2 error
 	}
 	joinSessionReturnsOnCall map[int]struct {
-		result1 session.JoinSessionResult
+		result1 sessionio.JoinSessionResult
 		result2 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeJoinSessionUsecase) JoinSession(arg1 context.Context, arg2 session.JoinSessionCommand) (session.JoinSessionResult, error) {
+func (fake *FakeJoinSessionUsecase) JoinSession(arg1 context.Context, arg2 sessionio.JoinSessionCommand) (sessionio.JoinSessionResult, error) {
 	fake.joinSessionMutex.Lock()
 	ret, specificReturn := fake.joinSessionReturnsOnCall[len(fake.joinSessionArgsForCall)]
 	fake.joinSessionArgsForCall = append(fake.joinSessionArgsForCall, struct {
 		arg1 context.Context
-		arg2 session.JoinSessionCommand
+		arg2 sessionio.JoinSessionCommand
 	}{arg1, arg2})
 	stub := fake.JoinSessionStub
 	fakeReturns := fake.joinSessionReturns
@@ -54,41 +54,41 @@ func (fake *FakeJoinSessionUsecase) JoinSessionCallCount() int {
 	return len(fake.joinSessionArgsForCall)
 }
 
-func (fake *FakeJoinSessionUsecase) JoinSessionCalls(stub func(context.Context, session.JoinSessionCommand) (session.JoinSessionResult, error)) {
+func (fake *FakeJoinSessionUsecase) JoinSessionCalls(stub func(context.Context, sessionio.JoinSessionCommand) (sessionio.JoinSessionResult, error)) {
 	fake.joinSessionMutex.Lock()
 	defer fake.joinSessionMutex.Unlock()
 	fake.JoinSessionStub = stub
 }
 
-func (fake *FakeJoinSessionUsecase) JoinSessionArgsForCall(i int) (context.Context, session.JoinSessionCommand) {
+func (fake *FakeJoinSessionUsecase) JoinSessionArgsForCall(i int) (context.Context, sessionio.JoinSessionCommand) {
 	fake.joinSessionMutex.RLock()
 	defer fake.joinSessionMutex.RUnlock()
 	argsForCall := fake.joinSessionArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeJoinSessionUsecase) JoinSessionReturns(result1 session.JoinSessionResult, result2 error) {
+func (fake *FakeJoinSessionUsecase) JoinSessionReturns(result1 sessionio.JoinSessionResult, result2 error) {
 	fake.joinSessionMutex.Lock()
 	defer fake.joinSessionMutex.Unlock()
 	fake.JoinSessionStub = nil
 	fake.joinSessionReturns = struct {
-		result1 session.JoinSessionResult
+		result1 sessionio.JoinSessionResult
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *FakeJoinSessionUsecase) JoinSessionReturnsOnCall(i int, result1 session.JoinSessionResult, result2 error) {
+func (fake *FakeJoinSessionUsecase) JoinSessionReturnsOnCall(i int, result1 sessionio.JoinSessionResult, result2 error) {
 	fake.joinSessionMutex.Lock()
 	defer fake.joinSessionMutex.Unlock()
 	fake.JoinSessionStub = nil
 	if fake.joinSessionReturnsOnCall == nil {
 		fake.joinSessionReturnsOnCall = make(map[int]struct {
-			result1 session.JoinSessionResult
+			result1 sessionio.JoinSessionResult
 			result2 error
 		})
 	}
 	fake.joinSessionReturnsOnCall[i] = struct {
-		result1 session.JoinSessionResult
+		result1 sessionio.JoinSessionResult
 		result2 error
 	}{result1, result2}
 }

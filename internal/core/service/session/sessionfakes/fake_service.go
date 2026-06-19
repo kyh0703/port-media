@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	sessiona "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/service/session"
+	sessiona "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 type FakeService struct {

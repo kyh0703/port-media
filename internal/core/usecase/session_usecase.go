@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 //go:generate go tool counterfeiter -generate
@@ -17,32 +17,32 @@ var (
 
 //counterfeiter:generate . CreateSessionUsecase
 type CreateSessionUsecase interface {
-	CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error)
+	CreateSession(ctx context.Context, req sessionio.CreateSessionRequest) (sessionio.CreateSessionResponse, error)
 }
 
 //counterfeiter:generate . JoinSessionUsecase
 type JoinSessionUsecase interface {
-	JoinSession(ctx context.Context, cmd sessiondto.JoinSessionCommand) (sessiondto.JoinSessionResult, error)
+	JoinSession(ctx context.Context, cmd sessionio.JoinSessionCommand) (sessionio.JoinSessionResult, error)
 }
 
 //counterfeiter:generate . LeaveParticipantUsecase
 type LeaveParticipantUsecase interface {
-	LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error)
+	LeaveParticipant(ctx context.Context, req sessionio.LeaveParticipantRequest) (sessionio.LeaveParticipantResponse, error)
 }
 
 //counterfeiter:generate . EndSessionUsecase
 type EndSessionUsecase interface {
-	EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error)
+	EndSession(ctx context.Context, req sessionio.EndSessionRequest) (sessionio.EndSessionResponse, error)
 }
 
 //counterfeiter:generate . GetSessionStatusQuery
 type GetSessionStatusQuery interface {
-	GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResult, bool, error)
+	GetSessionStatus(ctx context.Context, req sessionio.GetSessionStatusRequest) (sessionio.GetSessionStatusResult, bool, error)
 }
 
 //counterfeiter:generate . GetRuntimeStatsQuery
 type GetRuntimeStatsQuery interface {
-	GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error)
+	GetRuntimeStats(ctx context.Context) (sessionio.RuntimeStatsResponse, error)
 }
 
 //counterfeiter:generate . RoomMaintenanceUsecase

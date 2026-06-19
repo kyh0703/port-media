@@ -4,16 +4,16 @@ import (
 	"context"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
-func (s *service) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResult, bool, error) {
+func (s *service) GetSessionStatus(ctx context.Context, req sessionio.GetSessionStatusRequest) (sessionio.GetSessionStatusResult, bool, error) {
 	state, found, err := s.states.FindBySessionID(ctx, vo.SessionID(req.SessionID))
 	if err != nil || !found {
-		return sessiondto.GetSessionStatusResult{}, found, err
+		return sessionio.GetSessionStatusResult{}, found, err
 	}
 
-	return sessiondto.GetSessionStatusResult{
+	return sessionio.GetSessionStatusResult{
 		SessionID:             string(state.SessionID),
 		ConversationID:        string(state.ConversationID),
 		UserID:                state.UserID,
@@ -32,10 +32,10 @@ func (s *service) GetSessionStatus(ctx context.Context, req sessiondto.GetSessio
 	}, true, nil
 }
 
-func (s *service) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
+func (s *service) GetRuntimeStats(ctx context.Context) (sessionio.RuntimeStatsResponse, error) {
 	rooms, err := s.runtime.List(ctx)
 	if err != nil {
-		return sessiondto.RuntimeStatsResponse{}, err
+		return sessionio.RuntimeStatsResponse{}, err
 	}
 
 	return s.stats.Build(rooms), nil

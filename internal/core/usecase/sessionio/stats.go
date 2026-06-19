@@ -1,4 +1,4 @@
-package session
+package sessionio
 
 type RuntimeStatsResponse struct {
 	Rooms           int

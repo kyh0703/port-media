@@ -10,10 +10,10 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/repository"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
 	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 	"go.uber.org/zap"
 )
 
@@ -176,7 +176,7 @@ func compactRealtimeInitialEvents(events []string) []string {
 	return compacted
 }
 
-func (s *service) CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error) {
+func (s *service) CreateSession(ctx context.Context, req sessionio.CreateSessionRequest) (sessionio.CreateSessionResponse, error) {
 	now := s.now().UTC()
 	sessionID := vo.SessionID(req.SessionID)
 	if sessionID == "" {
@@ -188,10 +188,10 @@ func (s *service) CreateSession(ctx context.Context, req sessiondto.CreateSessio
 	room := entity.NewRoom(roomID, sessionID, conversationID, now)
 
 	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
-		return sessiondto.CreateSessionResponse{}, err
+		return sessionio.CreateSessionResponse{}, err
 	}
 
-	return sessiondto.CreateSessionResponse{
+	return sessionio.CreateSessionResponse{
 		SessionID:      string(sessionID),
 		ConversationID: string(conversationID),
 		RoomID:         string(roomID),
@@ -199,7 +199,7 @@ func (s *service) CreateSession(ctx context.Context, req sessiondto.CreateSessio
 	}, nil
 }
 
-func (s *service) JoinSession(ctx context.Context, req sessiondto.JoinSessionCommand) (sessiondto.JoinSessionResult, error) {
+func (s *service) JoinSession(ctx context.Context, req sessionio.JoinSessionCommand) (sessionio.JoinSessionResult, error) {
 	now := s.now().UTC()
 	sessionID := vo.SessionID(req.SessionID)
 	unlock := s.lockSession(sessionID)
@@ -207,30 +207,30 @@ func (s *service) JoinSession(ctx context.Context, req sessiondto.JoinSessionCom
 
 	room, err := s.findSessionRoom(ctx, sessionID)
 	if err != nil {
-		return sessiondto.JoinSessionResult{}, err
+		return sessionio.JoinSessionResult{}, err
 	}
 	if !room.CanJoinParticipants() {
-		return sessiondto.JoinSessionResult{}, usecase.ErrSessionNotJoinable
+		return sessionio.JoinSessionResult{}, usecase.ErrSessionNotJoinable
 	}
 	publishAudio := req.PublishesAudio()
 	room.SetUserID(req.UserID, now)
 
 	participant, peer, err := s.acceptClientParticipant(ctx, sessionID, req.SDP, publishAudio, now)
 	if err != nil {
-		return sessiondto.JoinSessionResult{}, err
+		return sessionio.JoinSessionResult{}, err
 	}
 	if err := room.JoinClient(participant, now); err != nil {
 		_ = s.media.CloseParticipant(ctx, sessionID, participant.ID)
-		return sessiondto.JoinSessionResult{}, toJoinSessionError(err)
+		return sessionio.JoinSessionResult{}, toJoinSessionError(err)
 	}
 
 	if err := s.ensureOpenAIParticipant(ctx, &room, sessionID, req.UserID, now); err != nil {
-		return sessiondto.JoinSessionResult{}, err
+		return sessionio.JoinSessionResult{}, err
 	}
 
 	if err := s.saveActiveRoomState(ctx, room, req.UserID, now); err != nil {
 		_ = s.failRoom(ctx, room, req.UserID, now, "join_state_persist_failed")
-		return sessiondto.JoinSessionResult{}, err
+		return sessionio.JoinSessionResult{}, err
 	}
 
 	s.logParticipantEvent("media_participant_joined", room, participant,
@@ -246,7 +246,7 @@ func (s *service) JoinSession(ctx context.Context, req sessiondto.JoinSessionCom
 		}
 	}
 
-	return sessiondto.JoinSessionResult{
+	return sessionio.JoinSessionResult{
 		SDPAnswer:     peer.AnswerSDP,
 		RoomID:        string(room.ID),
 		ParticipantID: string(participant.ID),
@@ -385,7 +385,7 @@ func (s *service) connectOpenAIParticipant(ctx context.Context, sessionID vo.Ses
 	return participant, nil
 }
 
-func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
+func (s *service) LeaveParticipant(ctx context.Context, req sessionio.LeaveParticipantRequest) (sessionio.LeaveParticipantResponse, error) {
 	now := s.now().UTC()
 	sessionID := vo.SessionID(req.SessionID)
 	participantID := vo.ParticipantID(req.ParticipantID)
@@ -394,15 +394,15 @@ func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeavePart
 
 	room, found, err := s.runtime.FindBySessionID(ctx, sessionID)
 	if err != nil {
-		return sessiondto.LeaveParticipantResponse{}, err
+		return sessionio.LeaveParticipantResponse{}, err
 	}
 	if !found {
-		return sessiondto.LeaveParticipantResponse{}, nil
+		return sessionio.LeaveParticipantResponse{}, nil
 	}
 
 	participant, found := room.Participant(participantID)
 	if !found {
-		return sessiondto.LeaveParticipantResponse{
+		return sessionio.LeaveParticipantResponse{
 			SessionID:     string(sessionID),
 			RoomID:        string(room.ID),
 			ParticipantID: string(participantID),
@@ -414,7 +414,7 @@ func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeavePart
 			zap.String("participant_id", string(participant.ID)),
 			zap.String("participant_role", string(participant.Role)),
 		)
-		return sessiondto.LeaveParticipantResponse{
+		return sessionio.LeaveParticipantResponse{
 			SessionID:     string(sessionID),
 			RoomID:        string(room.ID),
 			ParticipantID: string(participantID),
@@ -424,16 +424,16 @@ func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeavePart
 
 	room.RemoveParticipant(participantID, now)
 	if err := s.media.CloseParticipant(ctx, sessionID, participantID); err != nil {
-		return sessiondto.LeaveParticipantResponse{}, err
+		return sessionio.LeaveParticipantResponse{}, err
 	}
 	if err := s.runtime.Save(ctx, room); err != nil {
-		return sessiondto.LeaveParticipantResponse{}, err
+		return sessionio.LeaveParticipantResponse{}, err
 	}
 	if err := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room)); err != nil {
-		return sessiondto.LeaveParticipantResponse{}, err
+		return sessionio.LeaveParticipantResponse{}, err
 	}
 	if err := s.states.Save(ctx, s.project.Project(room, req.UserID, now)); err != nil {
-		return sessiondto.LeaveParticipantResponse{}, err
+		return sessionio.LeaveParticipantResponse{}, err
 	}
 
 	s.logParticipantEvent("media_participant_left", room, participant,
@@ -441,7 +441,7 @@ func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeavePart
 		zap.Int("participants", room.ParticipantCount()),
 	)
 
-	return sessiondto.LeaveParticipantResponse{
+	return sessionio.LeaveParticipantResponse{
 		SessionID:     string(sessionID),
 		RoomID:        string(room.ID),
 		ParticipantID: string(participantID),
@@ -449,7 +449,7 @@ func (s *service) LeaveParticipant(ctx context.Context, req sessiondto.LeavePart
 	}, nil
 }
 
-func (s *service) EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error) {
+func (s *service) EndSession(ctx context.Context, req sessionio.EndSessionRequest) (sessionio.EndSessionResponse, error) {
 	now := s.now().UTC()
 	sessionID := vo.SessionID(req.SessionID)
 	unlock := s.lockSession(sessionID)
@@ -457,25 +457,25 @@ func (s *service) EndSession(ctx context.Context, req sessiondto.EndSessionReque
 
 	room, found, err := s.runtime.FindBySessionID(ctx, sessionID)
 	if err != nil {
-		return sessiondto.EndSessionResponse{}, err
+		return sessionio.EndSessionResponse{}, err
 	}
 	if !found {
 		record, recordFound, recordErr := s.records.FindBySessionID(ctx, sessionID)
 		err = recordErr
 		if err != nil {
-			return sessiondto.EndSessionResponse{}, err
+			return sessionio.EndSessionResponse{}, err
 		}
 		if !recordFound {
-			return sessiondto.EndSessionResponse{}, nil
+			return sessionio.EndSessionResponse{}, nil
 		}
 		room = record.RuntimeRoom()
 	}
 
 	if err := s.closeRoom(ctx, room, req.UserID, now, "explicit_end"); err != nil {
-		return sessiondto.EndSessionResponse{}, err
+		return sessionio.EndSessionResponse{}, err
 	}
 
-	return sessiondto.EndSessionResponse{
+	return sessionio.EndSessionResponse{
 		SessionID: string(sessionID),
 		RoomID:    string(room.ID),
 		Status:    string(vo.RoomStatusClosed),

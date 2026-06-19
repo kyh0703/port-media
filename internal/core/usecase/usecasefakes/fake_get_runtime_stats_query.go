@@ -5,29 +5,29 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 type FakeGetRuntimeStatsQuery struct {
-	GetRuntimeStatsStub        func(context.Context) (session.RuntimeStatsResponse, error)
+	GetRuntimeStatsStub        func(context.Context) (sessionio.RuntimeStatsResponse, error)
 	getRuntimeStatsMutex       sync.RWMutex
 	getRuntimeStatsArgsForCall []struct {
 		arg1 context.Context
 	}
 	getRuntimeStatsReturns struct {
-		result1 session.RuntimeStatsResponse
+		result1 sessionio.RuntimeStatsResponse
 		result2 error
 	}
 	getRuntimeStatsReturnsOnCall map[int]struct {
-		result1 session.RuntimeStatsResponse
+		result1 sessionio.RuntimeStatsResponse
 		result2 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStats(arg1 context.Context) (session.RuntimeStatsResponse, error) {
+func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStats(arg1 context.Context) (sessionio.RuntimeStatsResponse, error) {
 	fake.getRuntimeStatsMutex.Lock()
 	ret, specificReturn := fake.getRuntimeStatsReturnsOnCall[len(fake.getRuntimeStatsArgsForCall)]
 	fake.getRuntimeStatsArgsForCall = append(fake.getRuntimeStatsArgsForCall, struct {
@@ -52,7 +52,7 @@ func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStatsCallCount() int {
 	return len(fake.getRuntimeStatsArgsForCall)
 }
 
-func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStatsCalls(stub func(context.Context) (session.RuntimeStatsResponse, error)) {
+func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStatsCalls(stub func(context.Context) (sessionio.RuntimeStatsResponse, error)) {
 	fake.getRuntimeStatsMutex.Lock()
 	defer fake.getRuntimeStatsMutex.Unlock()
 	fake.GetRuntimeStatsStub = stub
@@ -65,28 +65,28 @@ func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStatsArgsForCall(i int) context.
 	return argsForCall.arg1
 }
 
-func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStatsReturns(result1 session.RuntimeStatsResponse, result2 error) {
+func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStatsReturns(result1 sessionio.RuntimeStatsResponse, result2 error) {
 	fake.getRuntimeStatsMutex.Lock()
 	defer fake.getRuntimeStatsMutex.Unlock()
 	fake.GetRuntimeStatsStub = nil
 	fake.getRuntimeStatsReturns = struct {
-		result1 session.RuntimeStatsResponse
+		result1 sessionio.RuntimeStatsResponse
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStatsReturnsOnCall(i int, result1 session.RuntimeStatsResponse, result2 error) {
+func (fake *FakeGetRuntimeStatsQuery) GetRuntimeStatsReturnsOnCall(i int, result1 sessionio.RuntimeStatsResponse, result2 error) {
 	fake.getRuntimeStatsMutex.Lock()
 	defer fake.getRuntimeStatsMutex.Unlock()
 	fake.GetRuntimeStatsStub = nil
 	if fake.getRuntimeStatsReturnsOnCall == nil {
 		fake.getRuntimeStatsReturnsOnCall = make(map[int]struct {
-			result1 session.RuntimeStatsResponse
+			result1 sessionio.RuntimeStatsResponse
 			result2 error
 		})
 	}
 	fake.getRuntimeStatsReturnsOnCall[i] = struct {
-		result1 session.RuntimeStatsResponse
+		result1 sessionio.RuntimeStatsResponse
 		result2 error
 	}{result1, result2}
 }

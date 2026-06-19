@@ -5,35 +5,35 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 type FakeEndSessionUsecase struct {
-	EndSessionStub        func(context.Context, session.EndSessionRequest) (session.EndSessionResponse, error)
+	EndSessionStub        func(context.Context, sessionio.EndSessionRequest) (sessionio.EndSessionResponse, error)
 	endSessionMutex       sync.RWMutex
 	endSessionArgsForCall []struct {
 		arg1 context.Context
-		arg2 session.EndSessionRequest
+		arg2 sessionio.EndSessionRequest
 	}
 	endSessionReturns struct {
-		result1 session.EndSessionResponse
+		result1 sessionio.EndSessionResponse
 		result2 error
 	}
 	endSessionReturnsOnCall map[int]struct {
-		result1 session.EndSessionResponse
+		result1 sessionio.EndSessionResponse
 		result2 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeEndSessionUsecase) EndSession(arg1 context.Context, arg2 session.EndSessionRequest) (session.EndSessionResponse, error) {
+func (fake *FakeEndSessionUsecase) EndSession(arg1 context.Context, arg2 sessionio.EndSessionRequest) (sessionio.EndSessionResponse, error) {
 	fake.endSessionMutex.Lock()
 	ret, specificReturn := fake.endSessionReturnsOnCall[len(fake.endSessionArgsForCall)]
 	fake.endSessionArgsForCall = append(fake.endSessionArgsForCall, struct {
 		arg1 context.Context
-		arg2 session.EndSessionRequest
+		arg2 sessionio.EndSessionRequest
 	}{arg1, arg2})
 	stub := fake.EndSessionStub
 	fakeReturns := fake.endSessionReturns
@@ -54,41 +54,41 @@ func (fake *FakeEndSessionUsecase) EndSessionCallCount() int {
 	return len(fake.endSessionArgsForCall)
 }
 
-func (fake *FakeEndSessionUsecase) EndSessionCalls(stub func(context.Context, session.EndSessionRequest) (session.EndSessionResponse, error)) {
+func (fake *FakeEndSessionUsecase) EndSessionCalls(stub func(context.Context, sessionio.EndSessionRequest) (sessionio.EndSessionResponse, error)) {
 	fake.endSessionMutex.Lock()
 	defer fake.endSessionMutex.Unlock()
 	fake.EndSessionStub = stub
 }
 
-func (fake *FakeEndSessionUsecase) EndSessionArgsForCall(i int) (context.Context, session.EndSessionRequest) {
+func (fake *FakeEndSessionUsecase) EndSessionArgsForCall(i int) (context.Context, sessionio.EndSessionRequest) {
 	fake.endSessionMutex.RLock()
 	defer fake.endSessionMutex.RUnlock()
 	argsForCall := fake.endSessionArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeEndSessionUsecase) EndSessionReturns(result1 session.EndSessionResponse, result2 error) {
+func (fake *FakeEndSessionUsecase) EndSessionReturns(result1 sessionio.EndSessionResponse, result2 error) {
 	fake.endSessionMutex.Lock()
 	defer fake.endSessionMutex.Unlock()
 	fake.EndSessionStub = nil
 	fake.endSessionReturns = struct {
-		result1 session.EndSessionResponse
+		result1 sessionio.EndSessionResponse
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *FakeEndSessionUsecase) EndSessionReturnsOnCall(i int, result1 session.EndSessionResponse, result2 error) {
+func (fake *FakeEndSessionUsecase) EndSessionReturnsOnCall(i int, result1 sessionio.EndSessionResponse, result2 error) {
 	fake.endSessionMutex.Lock()
 	defer fake.endSessionMutex.Unlock()
 	fake.EndSessionStub = nil
 	if fake.endSessionReturnsOnCall == nil {
 		fake.endSessionReturnsOnCall = make(map[int]struct {
-			result1 session.EndSessionResponse
+			result1 sessionio.EndSessionResponse
 			result2 error
 		})
 	}
 	fake.endSessionReturnsOnCall[i] = struct {
-		result1 session.EndSessionResponse
+		result1 sessionio.EndSessionResponse
 		result2 error
 	}{result1, result2}
 }

@@ -1,4 +1,4 @@
-package session
+package sessionio
 
 type JoinSessionCommand struct {
 	SessionID      string

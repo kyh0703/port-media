@@ -3,13 +3,13 @@ package session
 import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 type roomStatsQuery struct{}
 
-func (roomStatsQuery) Build(rooms []entity.Room) sessiondto.RuntimeStatsResponse {
-	stats := sessiondto.RuntimeStatsResponse{
+func (roomStatsQuery) Build(rooms []entity.Room) sessionio.RuntimeStatsResponse {
+	stats := sessionio.RuntimeStatsResponse{
 		Rooms:           len(rooms),
 		Sessions:        len(rooms),
 		ByStatus:        make(map[string]int),
@@ -18,7 +18,7 @@ func (roomStatsQuery) Build(rooms []entity.Room) sessiondto.RuntimeStatsResponse
 		ByRole:          make(map[string]int),
 		ByAudioMode:     make(map[string]int),
 		ByRealtimeEvent: make(map[string]int),
-		RoomsDetail:     make([]sessiondto.RuntimeRoomStatDetail, 0, len(rooms)),
+		RoomsDetail:     make([]sessionio.RuntimeRoomStatDetail, 0, len(rooms)),
 	}
 
 	for _, room := range rooms {
@@ -41,7 +41,7 @@ func (roomStatsQuery) Build(rooms []entity.Room) sessiondto.RuntimeStatsResponse
 				stats.ByAudioMode[participantAudioMode(participant)]++
 			}
 		}
-		stats.RoomsDetail = append(stats.RoomsDetail, sessiondto.RuntimeRoomStatDetail{
+		stats.RoomsDetail = append(stats.RoomsDetail, sessionio.RuntimeRoomStatDetail{
 			RoomID:                string(room.ID),
 			SessionID:             string(room.SessionID),
 			ConversationID:        string(room.ConversationID),

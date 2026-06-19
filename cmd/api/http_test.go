@@ -16,7 +16,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/adapter/out/persistence"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/out/repository"
 	rtc "github.com/kyh0703/portfoilo-media/internal/adapter/out/webrtc"
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 	pkg "github.com/kyh0703/portfoilo-media/internal/pkg"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/constant"
 	"go.uber.org/fx"
@@ -33,44 +33,44 @@ type pathInspectHandler struct {
 }
 
 type appFakeSessionUsecases struct {
-	stats sessiondto.RuntimeStatsResponse
+	stats sessionio.RuntimeStatsResponse
 	err   error
 }
 
-func (f appFakeSessionUsecases) CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error) {
+func (f appFakeSessionUsecases) CreateSession(ctx context.Context, req sessionio.CreateSessionRequest) (sessionio.CreateSessionResponse, error) {
 	_ = ctx
 	_ = req
-	return sessiondto.CreateSessionResponse{}, nil
+	return sessionio.CreateSessionResponse{}, nil
 }
 
-func (f appFakeSessionUsecases) JoinSession(ctx context.Context, req sessiondto.JoinSessionCommand) (sessiondto.JoinSessionResult, error) {
+func (f appFakeSessionUsecases) JoinSession(ctx context.Context, req sessionio.JoinSessionCommand) (sessionio.JoinSessionResult, error) {
 	_ = ctx
 	_ = req
-	return sessiondto.JoinSessionResult{}, nil
+	return sessionio.JoinSessionResult{}, nil
 }
 
-func (f appFakeSessionUsecases) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
+func (f appFakeSessionUsecases) LeaveParticipant(ctx context.Context, req sessionio.LeaveParticipantRequest) (sessionio.LeaveParticipantResponse, error) {
 	_ = ctx
 	_ = req
-	return sessiondto.LeaveParticipantResponse{}, nil
+	return sessionio.LeaveParticipantResponse{}, nil
 }
 
-func (f appFakeSessionUsecases) EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error) {
+func (f appFakeSessionUsecases) EndSession(ctx context.Context, req sessionio.EndSessionRequest) (sessionio.EndSessionResponse, error) {
 	_ = ctx
 	_ = req
-	return sessiondto.EndSessionResponse{}, nil
+	return sessionio.EndSessionResponse{}, nil
 }
 
-func (f appFakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResult, bool, error) {
+func (f appFakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessionio.GetSessionStatusRequest) (sessionio.GetSessionStatusResult, bool, error) {
 	_ = ctx
 	_ = req
-	return sessiondto.GetSessionStatusResult{}, false, nil
+	return sessionio.GetSessionStatusResult{}, false, nil
 }
 
-func (f appFakeSessionUsecases) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
+func (f appFakeSessionUsecases) GetRuntimeStats(ctx context.Context) (sessionio.RuntimeStatsResponse, error) {
 	_ = ctx
 	if f.err != nil {
-		return sessiondto.RuntimeStatsResponse{}, f.err
+		return sessionio.RuntimeStatsResponse{}, f.err
 	}
 	return f.stats, nil
 }

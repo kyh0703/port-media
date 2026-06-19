@@ -9,18 +9,19 @@ import (
 	"strings"
 	"testing"
 
+	httpdto "github.com/kyh0703/portfoilo-media/internal/adapter/in/http/dto"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	coreport "github.com/kyh0703/portfoilo-media/internal/core/port"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
 	"go.uber.org/zap"
 )
 
 type fakeSessionUsecases struct {
-	offerReq sessiondto.JoinSessionCommand
-	leaveReq sessiondto.LeaveParticipantRequest
-	endReq   sessiondto.EndSessionRequest
-	status   sessiondto.GetSessionStatusResult
+	offerReq sessionio.JoinSessionCommand
+	leaveReq sessionio.LeaveParticipantRequest
+	endReq   sessionio.EndSessionRequest
+	status   sessionio.GetSessionStatusResult
 	found    bool
 	offerErr error
 }
@@ -36,25 +37,25 @@ func (v fakeMediaTokenVerifier) Verify(ctx context.Context, raw string) (corepor
 	return v.token, v.err
 }
 
-func (f *fakeSessionUsecases) CreateSession(ctx context.Context, req sessiondto.CreateSessionRequest) (sessiondto.CreateSessionResponse, error) {
+func (f *fakeSessionUsecases) CreateSession(ctx context.Context, req sessionio.CreateSessionRequest) (sessionio.CreateSessionResponse, error) {
 	_ = ctx
 	_ = req
-	return sessiondto.CreateSessionResponse{}, nil
+	return sessionio.CreateSessionResponse{}, nil
 }
 
-func (f *fakeSessionUsecases) JoinSession(ctx context.Context, req sessiondto.JoinSessionCommand) (sessiondto.JoinSessionResult, error) {
+func (f *fakeSessionUsecases) JoinSession(ctx context.Context, req sessionio.JoinSessionCommand) (sessionio.JoinSessionResult, error) {
 	_ = ctx
 	f.offerReq = req
 	if f.offerErr != nil {
-		return sessiondto.JoinSessionResult{}, f.offerErr
+		return sessionio.JoinSessionResult{}, f.offerErr
 	}
-	return sessiondto.JoinSessionResult{SDPAnswer: "answer-sdp", RoomID: "room-1", ParticipantID: "participant-1"}, nil
+	return sessionio.JoinSessionResult{SDPAnswer: "answer-sdp", RoomID: "room-1", ParticipantID: "participant-1"}, nil
 }
 
-func (f *fakeSessionUsecases) LeaveParticipant(ctx context.Context, req sessiondto.LeaveParticipantRequest) (sessiondto.LeaveParticipantResponse, error) {
+func (f *fakeSessionUsecases) LeaveParticipant(ctx context.Context, req sessionio.LeaveParticipantRequest) (sessionio.LeaveParticipantResponse, error) {
 	_ = ctx
 	f.leaveReq = req
-	return sessiondto.LeaveParticipantResponse{
+	return sessionio.LeaveParticipantResponse{
 		SessionID:     req.SessionID,
 		RoomID:        "room-1",
 		ParticipantID: req.ParticipantID,
@@ -62,17 +63,17 @@ func (f *fakeSessionUsecases) LeaveParticipant(ctx context.Context, req sessiond
 	}, nil
 }
 
-func (f *fakeSessionUsecases) EndSession(ctx context.Context, req sessiondto.EndSessionRequest) (sessiondto.EndSessionResponse, error) {
+func (f *fakeSessionUsecases) EndSession(ctx context.Context, req sessionio.EndSessionRequest) (sessionio.EndSessionResponse, error) {
 	_ = ctx
 	f.endReq = req
-	return sessiondto.EndSessionResponse{
+	return sessionio.EndSessionResponse{
 		SessionID: req.SessionID,
 		RoomID:    "room-1",
 		Status:    "closed",
 	}, nil
 }
 
-func (f *fakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessiondto.GetSessionStatusRequest) (sessiondto.GetSessionStatusResult, bool, error) {
+func (f *fakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessionio.GetSessionStatusRequest) (sessionio.GetSessionStatusResult, bool, error) {
 	_ = ctx
 	if f.status.SessionID == "" {
 		f.status.SessionID = req.SessionID
@@ -80,9 +81,9 @@ func (f *fakeSessionUsecases) GetSessionStatus(ctx context.Context, req sessiond
 	return f.status, f.found, nil
 }
 
-func (f *fakeSessionUsecases) GetRuntimeStats(ctx context.Context) (sessiondto.RuntimeStatsResponse, error) {
+func (f *fakeSessionUsecases) GetRuntimeStats(ctx context.Context) (sessionio.RuntimeStatsResponse, error) {
 	_ = ctx
-	return sessiondto.RuntimeStatsResponse{}, nil
+	return sessionio.RuntimeStatsResponse{}, nil
 }
 
 func newFakeSessionsHandler(session *fakeSessionUsecases, tokenVerifier coreport.MediaTokenVerifier) *SessionsHandler {
@@ -99,7 +100,7 @@ func newFakeSessionsHandler(session *fakeSessionUsecases, tokenVerifier coreport
 func TestSessionsHandlerGetsSessionStatusWithMediaToken(t *testing.T) {
 	usecase := &fakeSessionUsecases{
 		found: true,
-		status: sessiondto.GetSessionStatusResult{
+		status: sessionio.GetSessionStatusResult{
 			SessionID:       "session-1",
 			ConversationID:  "conversation-1",
 			UserID:          "user-1",
@@ -246,8 +247,8 @@ func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
 	if usecase.offerReq.SDP != "offer-sdp" {
 		t.Fatalf("SDP = %q, want offer-sdp", usecase.offerReq.SDP)
 	}
-	if usecase.offerReq.AudioMode != sessiondto.AudioModePublisher {
-		t.Fatalf("AudioMode = %q, want %q", usecase.offerReq.AudioMode, sessiondto.AudioModePublisher)
+	if usecase.offerReq.AudioMode != sessionio.AudioModePublisher {
+		t.Fatalf("AudioMode = %q, want %q", usecase.offerReq.AudioMode, sessionio.AudioModePublisher)
 	}
 }
 
@@ -286,8 +287,8 @@ func TestSessionsHandlerAcceptsListenerJoinMode(t *testing.T) {
 		body, _ := io.ReadAll(res.Body)
 		t.Fatalf("status = %d, want %d body=%s", res.StatusCode, http.StatusOK, string(body))
 	}
-	if usecase.offerReq.AudioMode != sessiondto.AudioModeListener {
-		t.Fatalf("AudioMode = %q, want %q", usecase.offerReq.AudioMode, sessiondto.AudioModeListener)
+	if usecase.offerReq.AudioMode != sessionio.AudioModeListener {
+		t.Fatalf("AudioMode = %q, want %q", usecase.offerReq.AudioMode, sessionio.AudioModeListener)
 	}
 }
 
@@ -322,9 +323,9 @@ func TestSessionsHandlerLeavesParticipantWithMediaToken(t *testing.T) {
 		t.Fatalf("status = %d, want %d body=%s", res.StatusCode, http.StatusOK, string(body))
 	}
 	var body struct {
-		StatusCode int                      `json:"statusCode"`
-		Message    string                   `json:"message"`
-		Data       leaveParticipantResponse `json:"data"`
+		StatusCode int                              `json:"statusCode"`
+		Message    string                           `json:"message"`
+		Data       httpdto.LeaveParticipantResponse `json:"data"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 		t.Fatalf("Decode() error = %v", err)

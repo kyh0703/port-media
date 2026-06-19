@@ -1,4 +1,4 @@
-package session
+package sessionio
 
 type ParticipantStateResult struct {
 	ID              string

@@ -1,4 +1,4 @@
-package session
+package sessionio
 
 type CreateSessionRequest struct {
 	SessionID      string

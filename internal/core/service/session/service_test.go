@@ -8,12 +8,12 @@ import (
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
 	"github.com/kyh0703/portfoilo-media/internal/core/port/portfakes"
 	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/query/session/sessionfakes"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -21,7 +21,7 @@ import (
 
 func createSessionForTest(t *testing.T, svc Service) {
 	t.Helper()
-	_, err := svc.CreateSession(context.Background(), sessiondto.CreateSessionRequest{
+	_, err := svc.CreateSession(context.Background(), sessionio.CreateSessionRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 	})
@@ -73,7 +73,7 @@ func TestServiceAcceptsOfferThroughSFU(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	res, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	res, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -120,7 +120,7 @@ func TestServiceRejectsOfferWhenSessionWasNotCreated(t *testing.T) {
 	})
 	svc := NewService(records, runtime, states, media, provider)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -149,7 +149,7 @@ func TestServiceRejectsJoinWhenRoomIsClosedBeforeAcceptingMediaOffer(t *testing.
 		t.Fatalf("records Save() error = %v", err)
 	}
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -186,7 +186,7 @@ func TestServiceCreatesRoomRuntimeForClientJoin(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	res, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	res, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -253,7 +253,7 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -263,7 +263,7 @@ func TestServiceAllowsMultipleAudioPublishers(t *testing.T) {
 		t.Fatalf("JoinSession() first error = %v", err)
 	}
 
-	_, err = svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err = svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -320,7 +320,7 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -330,12 +330,12 @@ func TestServiceAllowsMultipleClientsWhenAdditionalClientIsListener(t *testing.T
 		t.Fatalf("JoinSession() publisher error = %v", err)
 	}
 
-	_, err = svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err = svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
 		SDP:            "listener-offer-sdp",
-		AudioMode:      sessiondto.AudioModeListener,
+		AudioMode:      sessionio.AudioModeListener,
 	})
 	if err != nil {
 		t.Fatalf("JoinSession() listener error = %v", err)
@@ -408,7 +408,7 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	res, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	res, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -418,7 +418,7 @@ func TestServiceLeavesClientParticipantWithoutClosingRoom(t *testing.T) {
 		t.Fatalf("JoinSession() error = %v", err)
 	}
 
-	leave, err := svc.LeaveParticipant(context.Background(), sessiondto.LeaveParticipantRequest{
+	leave, err := svc.LeaveParticipant(context.Background(), sessionio.LeaveParticipantRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -493,7 +493,7 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -504,7 +504,7 @@ func TestServiceLeavesCriticalParticipantByFailingRoom(t *testing.T) {
 	}
 
 	_, createdInput := media.CreateOfferArgsForCall(0)
-	leave, err := svc.LeaveParticipant(context.Background(), sessiondto.LeaveParticipantRequest{
+	leave, err := svc.LeaveParticipant(context.Background(), sessionio.LeaveParticipantRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -568,7 +568,7 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, noopProviderEventNormalizer{}, defaultRealtimeControlConfig(), zap.New(core))
 	createSessionForTest(t, svc)
 
-	res, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	res, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -595,7 +595,7 @@ func TestServiceLogsMonitoringLifecycleFields(t *testing.T) {
 	if joined["participant_role"] != string(vo.ParticipantRoleClient) {
 		t.Fatalf("participant_role = %v, want client", joined["participant_role"])
 	}
-	if joined["audio_mode"] != string(sessiondto.AudioModePublisher) {
+	if joined["audio_mode"] != string(sessionio.AudioModePublisher) {
 		t.Fatalf("audio_mode = %v, want publisher", joined["audio_mode"])
 	}
 
@@ -653,7 +653,7 @@ func TestServiceLogsRuntimeEventStateSaveFailures(t *testing.T) {
 	svc := newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, noopProviderEventNormalizer{}, defaultRealtimeControlConfig(), zap.New(observed))
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -706,7 +706,7 @@ func TestServicePersistsRoomMetadataForClientJoin(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -751,7 +751,7 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -835,7 +835,7 @@ func TestServiceUsesConfiguredOpenAIRealtimeDataChannel(t *testing.T) {
 	})
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -885,7 +885,7 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 	}, defaultRealtimeControlConfig(), zap.NewNop())
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -921,7 +921,7 @@ func TestServiceStoresRealtimeDataChannelEventInLiveState(t *testing.T) {
 		t.Fatalf("RecentRealtimeEvents[0].Type = %q, want assistant.response.completed", state.RecentRealtimeEvents[0].Type)
 	}
 
-	status, found, err := svc.GetSessionStatus(context.Background(), sessiondto.GetSessionStatusRequest{
+	status, found, err := svc.GetSessionStatus(context.Background(), sessionio.GetSessionStatusRequest{
 		SessionID: "session-1",
 	})
 	if err != nil {
@@ -988,7 +988,7 @@ func TestServicePublishesAllowlistedConversationEvent(t *testing.T) {
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1109,7 +1109,7 @@ func TestServicePublishesConversationEventsWithProviderItemLinksAsReceived(t *te
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1192,7 +1192,7 @@ func TestServiceBuildsConversationEventFromInjectedProviderNormalizer(t *testing
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1266,7 +1266,7 @@ func TestServiceIgnoresNonAllowlistedConversationEvent(t *testing.T) {
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1339,7 +1339,7 @@ func TestServiceFallbackConversationEventIDIsStable(t *testing.T) {
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1416,7 +1416,7 @@ func TestServiceLogsPublishErrorAndKeepsLiveStateUpdate(t *testing.T) {
 	)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1488,7 +1488,7 @@ func TestServiceLimitsRecentRealtimeEvents(t *testing.T) {
 	}, realtimeControlConfigFromOptions(ServiceOptions{RealtimeEventHistoryLimit: 2}), zap.NewNop())
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1548,7 +1548,7 @@ func TestServiceStoresActiveMediaSessionStateForClientJoin(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1629,7 +1629,7 @@ func TestServiceStoresFailedMediaSessionStateWhenOpenAICallFails(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1689,7 +1689,7 @@ func TestServiceCleansUpJoinResourcesWhenActiveStateSaveFails(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1752,7 +1752,7 @@ func TestServiceHangsUpOpenAICallWhenApplyAnswerFails(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1802,7 +1802,7 @@ func TestServiceStoresMediaSessionStateWhenTrackStateChanges(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1867,7 +1867,7 @@ func TestServiceKeepsRoomActiveWhenClientConnectionFails(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1931,7 +1931,7 @@ func TestServiceKeepsRoomActiveWhenClientMediaTrackFails(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -1998,7 +1998,7 @@ func TestServiceFailsSessionWhenOpenAIConnectionFails(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2059,7 +2059,7 @@ func TestServiceFailsSessionWhenOpenAIMediaTrackFails(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2118,7 +2118,7 @@ func TestServiceStoresMediaSessionStateWhenConnectionStateChanges(t *testing.T) 
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2190,7 +2190,7 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2200,7 +2200,7 @@ func TestServiceEndsSessionCleanup(t *testing.T) {
 		t.Fatalf("JoinSession() error = %v", err)
 	}
 
-	res, err := svc.EndSession(context.Background(), sessiondto.EndSessionRequest{
+	res, err := svc.EndSession(context.Background(), sessionio.EndSessionRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2260,7 +2260,7 @@ func TestServiceStoresClosedStateWhenCleanupFailsDuringEndSession(t *testing.T) 
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2270,7 +2270,7 @@ func TestServiceStoresClosedStateWhenCleanupFailsDuringEndSession(t *testing.T) 
 		t.Fatalf("JoinSession() error = %v", err)
 	}
 
-	_, err = svc.EndSession(context.Background(), sessiondto.EndSessionRequest{
+	_, err = svc.EndSession(context.Background(), sessionio.EndSessionRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2523,7 +2523,7 @@ func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2533,7 +2533,7 @@ func TestServiceStoresClosedMediaSessionStateWhenSessionEnds(t *testing.T) {
 		t.Fatalf("JoinSession() error = %v", err)
 	}
 
-	_, err = svc.EndSession(context.Background(), sessiondto.EndSessionRequest{
+	_, err = svc.EndSession(context.Background(), sessionio.EndSessionRequest{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2591,7 +2591,7 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 	}, defaultRealtimeControlConfig(), zap.NewNop())
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2658,8 +2658,8 @@ func TestServiceReturnsRuntimeStats(t *testing.T) {
 	if stats.ByRole[string(vo.ParticipantRoleClient)] != 1 {
 		t.Fatalf("client role count = %d, want 1", stats.ByRole[string(vo.ParticipantRoleClient)])
 	}
-	if stats.ByAudioMode[string(sessiondto.AudioModePublisher)] != 1 {
-		t.Fatalf("publisher count = %d, want 1", stats.ByAudioMode[string(sessiondto.AudioModePublisher)])
+	if stats.ByAudioMode[string(sessionio.AudioModePublisher)] != 1 {
+		t.Fatalf("publisher count = %d, want 1", stats.ByAudioMode[string(sessionio.AudioModePublisher)])
 	}
 	if stats.ByRealtimeEvent["assistant.response.completed"] != 1 {
 		t.Fatalf("assistant.response.completed count = %d, want 1", stats.ByRealtimeEvent["assistant.response.completed"])
@@ -2704,7 +2704,7 @@ func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
 	svc := NewService(records, runtime, states, media, provider)
 	createSessionForTest(t, svc)
 
-	_, err := svc.JoinSession(context.Background(), sessiondto.JoinSessionCommand{
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
 		SessionID:      "session-1",
 		ConversationID: "conversation-1",
 		UserID:         "user-1",
@@ -2714,7 +2714,7 @@ func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
 		t.Fatalf("JoinSession() error = %v", err)
 	}
 
-	status, found, err := svc.GetSessionStatus(context.Background(), sessiondto.GetSessionStatusRequest{
+	status, found, err := svc.GetSessionStatus(context.Background(), sessionio.GetSessionStatusRequest{
 		SessionID: "session-1",
 	})
 	if err != nil {
@@ -2737,7 +2737,7 @@ func TestServiceGetsSessionStatusFromRedisState(t *testing.T) {
 	}
 	var foundPublisher bool
 	for _, participant := range status.ParticipantStates {
-		if participant.Role == string(vo.ParticipantRoleClient) && participant.AudioMode == string(sessiondto.AudioModePublisher) {
+		if participant.Role == string(vo.ParticipantRoleClient) && participant.AudioMode == string(sessionio.AudioModePublisher) {
 			foundPublisher = true
 		}
 	}

@@ -6,8 +6,8 @@ import (
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
-	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	sessionquery "github.com/kyh0703/portfoilo-media/internal/core/query/session"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 type mediaSessionProjector struct {
@@ -170,10 +170,10 @@ func mediaSessionParticipantStates(room entity.Room) []sessionquery.MediaSession
 	return states
 }
 
-func participantStateResults(states []sessionquery.MediaSessionParticipantState) []sessiondto.ParticipantStateResult {
-	results := make([]sessiondto.ParticipantStateResult, 0, len(states))
+func participantStateResults(states []sessionquery.MediaSessionParticipantState) []sessionio.ParticipantStateResult {
+	results := make([]sessionio.ParticipantStateResult, 0, len(states))
 	for _, state := range states {
-		results = append(results, sessiondto.ParticipantStateResult{
+		results = append(results, sessionio.ParticipantStateResult{
 			ID:              string(state.ID),
 			Role:            string(state.Role),
 			AudioMode:       state.AudioMode,
@@ -184,10 +184,10 @@ func participantStateResults(states []sessionquery.MediaSessionParticipantState)
 	return results
 }
 
-func realtimeEventResults(events []sessionquery.RealtimeEvent) []sessiondto.RealtimeEventResult {
-	results := make([]sessiondto.RealtimeEventResult, 0, len(events))
+func realtimeEventResults(events []sessionquery.RealtimeEvent) []sessionio.RealtimeEventResult {
+	results := make([]sessionio.RealtimeEventResult, 0, len(events))
 	for _, event := range events {
-		results = append(results, sessiondto.RealtimeEventResult{
+		results = append(results, sessionio.RealtimeEventResult{
 			Type: event.Type,
 			At:   event.At,
 		})
@@ -214,7 +214,7 @@ func participantAudioMode(participant entity.Participant) string {
 		return ""
 	}
 	if participant.PublishAudio {
-		return string(sessiondto.AudioModePublisher)
+		return string(sessionio.AudioModePublisher)
 	}
-	return string(sessiondto.AudioModeListener)
+	return string(sessionio.AudioModeListener)
 }

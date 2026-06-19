@@ -5,35 +5,35 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
+	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
 type FakeLeaveParticipantUsecase struct {
-	LeaveParticipantStub        func(context.Context, session.LeaveParticipantRequest) (session.LeaveParticipantResponse, error)
+	LeaveParticipantStub        func(context.Context, sessionio.LeaveParticipantRequest) (sessionio.LeaveParticipantResponse, error)
 	leaveParticipantMutex       sync.RWMutex
 	leaveParticipantArgsForCall []struct {
 		arg1 context.Context
-		arg2 session.LeaveParticipantRequest
+		arg2 sessionio.LeaveParticipantRequest
 	}
 	leaveParticipantReturns struct {
-		result1 session.LeaveParticipantResponse
+		result1 sessionio.LeaveParticipantResponse
 		result2 error
 	}
 	leaveParticipantReturnsOnCall map[int]struct {
-		result1 session.LeaveParticipantResponse
+		result1 sessionio.LeaveParticipantResponse
 		result2 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeLeaveParticipantUsecase) LeaveParticipant(arg1 context.Context, arg2 session.LeaveParticipantRequest) (session.LeaveParticipantResponse, error) {
+func (fake *FakeLeaveParticipantUsecase) LeaveParticipant(arg1 context.Context, arg2 sessionio.LeaveParticipantRequest) (sessionio.LeaveParticipantResponse, error) {
 	fake.leaveParticipantMutex.Lock()
 	ret, specificReturn := fake.leaveParticipantReturnsOnCall[len(fake.leaveParticipantArgsForCall)]
 	fake.leaveParticipantArgsForCall = append(fake.leaveParticipantArgsForCall, struct {
 		arg1 context.Context
-		arg2 session.LeaveParticipantRequest
+		arg2 sessionio.LeaveParticipantRequest
 	}{arg1, arg2})
 	stub := fake.LeaveParticipantStub
 	fakeReturns := fake.leaveParticipantReturns
@@ -54,41 +54,41 @@ func (fake *FakeLeaveParticipantUsecase) LeaveParticipantCallCount() int {
 	return len(fake.leaveParticipantArgsForCall)
 }
 
-func (fake *FakeLeaveParticipantUsecase) LeaveParticipantCalls(stub func(context.Context, session.LeaveParticipantRequest) (session.LeaveParticipantResponse, error)) {
+func (fake *FakeLeaveParticipantUsecase) LeaveParticipantCalls(stub func(context.Context, sessionio.LeaveParticipantRequest) (sessionio.LeaveParticipantResponse, error)) {
 	fake.leaveParticipantMutex.Lock()
 	defer fake.leaveParticipantMutex.Unlock()
 	fake.LeaveParticipantStub = stub
 }
 
-func (fake *FakeLeaveParticipantUsecase) LeaveParticipantArgsForCall(i int) (context.Context, session.LeaveParticipantRequest) {
+func (fake *FakeLeaveParticipantUsecase) LeaveParticipantArgsForCall(i int) (context.Context, sessionio.LeaveParticipantRequest) {
 	fake.leaveParticipantMutex.RLock()
 	defer fake.leaveParticipantMutex.RUnlock()
 	argsForCall := fake.leaveParticipantArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeLeaveParticipantUsecase) LeaveParticipantReturns(result1 session.LeaveParticipantResponse, result2 error) {
+func (fake *FakeLeaveParticipantUsecase) LeaveParticipantReturns(result1 sessionio.LeaveParticipantResponse, result2 error) {
 	fake.leaveParticipantMutex.Lock()
 	defer fake.leaveParticipantMutex.Unlock()
 	fake.LeaveParticipantStub = nil
 	fake.leaveParticipantReturns = struct {
-		result1 session.LeaveParticipantResponse
+		result1 sessionio.LeaveParticipantResponse
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *FakeLeaveParticipantUsecase) LeaveParticipantReturnsOnCall(i int, result1 session.LeaveParticipantResponse, result2 error) {
+func (fake *FakeLeaveParticipantUsecase) LeaveParticipantReturnsOnCall(i int, result1 sessionio.LeaveParticipantResponse, result2 error) {
 	fake.leaveParticipantMutex.Lock()
 	defer fake.leaveParticipantMutex.Unlock()
 	fake.LeaveParticipantStub = nil
 	if fake.leaveParticipantReturnsOnCall == nil {
 		fake.leaveParticipantReturnsOnCall = make(map[int]struct {
-			result1 session.LeaveParticipantResponse
+			result1 sessionio.LeaveParticipantResponse
 			result2 error
 		})
 	}
 	fake.leaveParticipantReturnsOnCall[i] = struct {
-		result1 session.LeaveParticipantResponse
+		result1 sessionio.LeaveParticipantResponse
 		result2 error
 	}{result1, result2}
 }
