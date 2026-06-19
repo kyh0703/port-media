@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	sessiondto "github.com/kyh0703/portfoilo-media/internal/core/dto/session"
 	coreport "github.com/kyh0703/portfoilo-media/internal/core/port"
 	"github.com/kyh0703/portfoilo-media/internal/core/usecase"
+	"github.com/kyh0703/portfoilo-media/internal/pkg/bind"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/response"
 	"go.uber.org/fx"
@@ -59,7 +59,7 @@ func (h *SessionsHandler) Table() []Mapper {
 
 func (h *SessionsHandler) Create(w http.ResponseWriter, r *http.Request) error {
 	var req createSessionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := bind.JSON(r, &req); err != nil {
 		return exception.New(exception.CodeBadRequest, "invalid session request", http.StatusBadRequest)
 	}
 
