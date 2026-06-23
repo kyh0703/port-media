@@ -1,6 +1,6 @@
 # State
 
-current_version: none
+current_version: v2
 
 ## Completed Versions
 
