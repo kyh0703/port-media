@@ -2,21 +2,21 @@ package health
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/dialect/sqlitedialect"
-	"github.com/uptrace/bun/driver/sqliteshim"
+	"github.com/uptrace/bun/dialect/pgdialect"
 )
 
 func TestCheckerReturnsOKWhenDependenciesAreHealthy(t *testing.T) {
-	db := newTestDB(t)
+	db, mock := newTestDB(t)
 	defer func() {
 		_ = db.Close()
 	}()
+	mock.ExpectExec("SELECT 1").WillReturnResult(sqlmock.NewResult(0, 0))
 
 	redisServer, err := miniredis.Run()
 	if err != nil {
@@ -34,8 +34,8 @@ func TestCheckerReturnsOKWhenDependenciesAreHealthy(t *testing.T) {
 	if result.Status != StatusOK {
 		t.Fatalf("status = %q, want %q", result.Status, StatusOK)
 	}
-	if result.Checks["sqlite"].Status != StatusOK {
-		t.Fatalf("sqlite status = %q, want %q", result.Checks["sqlite"].Status, StatusOK)
+	if result.Checks["postgres"].Status != StatusOK {
+		t.Fatalf("postgres status = %q, want %q", result.Checks["postgres"].Status, StatusOK)
 	}
 	if result.Checks["redis"].Status != StatusOK {
 		t.Fatalf("redis status = %q, want %q", result.Checks["redis"].Status, StatusOK)
@@ -43,10 +43,11 @@ func TestCheckerReturnsOKWhenDependenciesAreHealthy(t *testing.T) {
 }
 
 func TestCheckerReturnsDegradedWhenRedisFails(t *testing.T) {
-	db := newTestDB(t)
+	db, mock := newTestDB(t)
 	defer func() {
 		_ = db.Close()
 	}()
+	mock.ExpectExec("SELECT 1").WillReturnResult(sqlmock.NewResult(0, 0))
 
 	redisServer, err := miniredis.Run()
 	if err != nil {
@@ -73,11 +74,12 @@ func TestCheckerReturnsDegradedWhenRedisFails(t *testing.T) {
 	}
 }
 
-func TestCheckerReturnsDegradedWhenSQLiteFails(t *testing.T) {
-	db := newTestDB(t)
-	if err := db.Close(); err != nil {
-		t.Fatalf("db.Close() error = %v", err)
-	}
+func TestCheckerReturnsDegradedWhenPostgresFails(t *testing.T) {
+	db, mock := newTestDB(t)
+	defer func() {
+		_ = db.Close()
+	}()
+	mock.ExpectExec("SELECT 1").WillReturnError(assertionError("postgres unavailable"))
 
 	redisServer, err := miniredis.Run()
 	if err != nil {
@@ -95,21 +97,32 @@ func TestCheckerReturnsDegradedWhenSQLiteFails(t *testing.T) {
 	if result.Status != StatusDegraded {
 		t.Fatalf("status = %q, want %q", result.Status, StatusDegraded)
 	}
-	if result.Checks["sqlite"].Status != StatusFailed {
-		t.Fatalf("sqlite status = %q, want %q", result.Checks["sqlite"].Status, StatusFailed)
+	if result.Checks["postgres"].Status != StatusFailed {
+		t.Fatalf("postgres status = %q, want %q", result.Checks["postgres"].Status, StatusFailed)
 	}
-	if result.Checks["sqlite"].Error == "" {
-		t.Fatal("sqlite error is empty")
+	if result.Checks["postgres"].Error == "" {
+		t.Fatal("postgres error is empty")
 	}
 }
 
-func newTestDB(t *testing.T) *bun.DB {
+func newTestDB(t *testing.T) (*bun.DB, sqlmock.Sqlmock) {
 	t.Helper()
 
-	sqldb, err := sql.Open(sqliteshim.ShimName, "file:test-health?mode=memory&cache=shared")
+	sqldb, mock, err := sqlmock.New()
 	if err != nil {
-		t.Fatalf("sql.Open() error = %v", err)
+		t.Fatalf("sqlmock.New() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatalf("sql expectations error = %v", err)
+		}
+	})
 
-	return bun.NewDB(sqldb, sqlitedialect.New())
+	return bun.NewDB(sqldb, pgdialect.New()), mock
+}
+
+type assertionError string
+
+func (e assertionError) Error() string {
+	return string(e)
 }

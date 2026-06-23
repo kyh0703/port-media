@@ -18,16 +18,8 @@ func NewConfig() (*Config, error) {
 	if err := validateConfig(cfg); err != nil {
 		return nil, err
 	}
-	applyDatabaseDefaults(&cfg)
 
 	return &cfg, nil
-}
-
-func applyDatabaseDefaults(cfg *Config) {
-	if cfg.Database.URL != "" {
-		return
-	}
-	cfg.Database.URL = "file:" + cfg.DBPath + "?cache=shared"
 }
 
 func validateConfig(cfg Config) error {

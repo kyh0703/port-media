@@ -44,8 +44,8 @@ func NewChecker(db *bun.DB, redis *redis.Client) Checker {
 
 func (c *checker) Check(ctx context.Context) Result {
 	checks := map[string]DependencyCheck{
-		"sqlite": c.checkSQLite(ctx),
-		"redis":  c.checkRedis(ctx),
+		"postgres": c.checkPostgres(ctx),
+		"redis":    c.checkRedis(ctx),
 	}
 
 	status := StatusOK
@@ -62,7 +62,7 @@ func (c *checker) Check(ctx context.Context) Result {
 	}
 }
 
-func (c *checker) checkSQLite(ctx context.Context) DependencyCheck {
+func (c *checker) checkPostgres(ctx context.Context) DependencyCheck {
 	if _, err := c.db.ExecContext(ctx, "SELECT 1"); err != nil {
 		return DependencyCheck{Status: StatusFailed, Error: err.Error()}
 	}

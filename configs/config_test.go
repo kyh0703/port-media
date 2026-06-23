@@ -25,7 +25,7 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	t.Setenv("SERVER_PORT", "9090")
 	t.Setenv("SERVER_CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
 	t.Setenv("LOG_DEVELOPMENT", "true")
-	t.Setenv("DB_PATH", "./data/test.sqlite")
+	t.Setenv("DATABASE_URL", "postgres://media:secret@db.example.test:5432/media?sslmode=require")
 	t.Setenv("REDIS_URL", "redis://localhost:6379/2")
 	t.Setenv("MEDIA_SERVER_URL", "http://media.example.test")
 	t.Setenv("REALTIME_STUN_URLS", "stun:one.example.test:19302,stun:two.example.test:19302")
@@ -50,11 +50,8 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	if !cfg.Log.Development {
 		t.Fatal("Log.Development = false, want true")
 	}
-	if cfg.DBPath != "./data/test.sqlite" {
-		t.Fatalf("DBPath = %q, want ./data/test.sqlite", cfg.DBPath)
-	}
-	if cfg.Database.URL != "file:./data/test.sqlite?cache=shared" {
-		t.Fatalf("Database.URL = %q, want file:./data/test.sqlite?cache=shared", cfg.Database.URL)
+	if cfg.Database.URL != "postgres://media:secret@db.example.test:5432/media?sslmode=require" {
+		t.Fatalf("Database.URL = %q, want postgres URL", cfg.Database.URL)
 	}
 	if cfg.Redis.URL != "redis://localhost:6379/2" {
 		t.Fatalf("Redis.URL = %q, want redis://localhost:6379/2", cfg.Redis.URL)
@@ -131,26 +128,22 @@ func TestNewConfigLoadsDefaults(t *testing.T) {
 	if cfg.Redis.URL != "redis://localhost:6379" {
 		t.Fatalf("Redis.URL = %q, want redis://localhost:6379", cfg.Redis.URL)
 	}
-	if cfg.DBPath != "./data/portfoilo_media.sqlite" {
-		t.Fatalf("DBPath = %q, want ./data/portfoilo_media.sqlite", cfg.DBPath)
-	}
-	if cfg.Database.URL != "file:./data/portfoilo_media.sqlite?cache=shared" {
-		t.Fatalf("Database.URL = %q, want file:./data/portfoilo_media.sqlite?cache=shared", cfg.Database.URL)
+	if cfg.Database.URL != "postgres://postgres:postgres@localhost:5432/portfoilo_media?sslmode=disable" {
+		t.Fatalf("Database.URL = %q, want default postgres URL", cfg.Database.URL)
 	}
 }
 
 func TestNewConfigKeepsExplicitDatabaseURL(t *testing.T) {
 	t.Setenv("NODE_ID", "1")
 	t.Setenv("OPENAI_API_KEY", "test-api-key")
-	t.Setenv("DB_PATH", "./data/ignored.sqlite")
-	t.Setenv("DATABASE_URL", "file:custom.db?cache=shared")
+	t.Setenv("DATABASE_URL", "postgres://media:secret@localhost:5432/custom?sslmode=disable")
 
 	cfg, err := NewConfig()
 	if err != nil {
 		t.Fatalf("NewConfig() error = %v", err)
 	}
-	if cfg.Database.URL != "file:custom.db?cache=shared" {
-		t.Fatalf("Database.URL = %q, want file:custom.db?cache=shared", cfg.Database.URL)
+	if cfg.Database.URL != "postgres://media:secret@localhost:5432/custom?sslmode=disable" {
+		t.Fatalf("Database.URL = %q, want explicit postgres URL", cfg.Database.URL)
 	}
 }
 

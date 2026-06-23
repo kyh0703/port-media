@@ -24,8 +24,8 @@ func TestHealthHandlerReturnsCommonOKResponse(t *testing.T) {
 		result: health.Result{
 			Status: health.StatusOK,
 			Checks: map[string]health.DependencyCheck{
-				"sqlite": {Status: health.StatusOK},
-				"redis":  {Status: health.StatusOK},
+				"postgres": {Status: health.StatusOK},
+				"redis":    {Status: health.StatusOK},
 			},
 		},
 	})
@@ -71,8 +71,8 @@ func TestHealthHandlerReturnsCommonDegradedResponse(t *testing.T) {
 		result: health.Result{
 			Status: health.StatusDegraded,
 			Checks: map[string]health.DependencyCheck{
-				"sqlite": {Status: health.StatusOK},
-				"redis":  {Status: health.StatusFailed, Error: "connection refused"},
+				"postgres": {Status: health.StatusOK},
+				"redis":    {Status: health.StatusFailed, Error: "connection refused"},
 			},
 		},
 	})
