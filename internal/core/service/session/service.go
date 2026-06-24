@@ -60,6 +60,8 @@ type ServiceOptions struct {
 	RealtimeEventHistoryLimit int
 }
 
+const defaultOpeningDisclaimerEvent = `{"type":"response.create","response":{"instructions":"다음 안내를 자연스럽고 차분한 한국어 음성으로 말하세요. 안녕하세요. 저는 마음을 정리하는 데 도움을 드리는 AI 정서 지원 상담원이에요. 지금 느끼는 감정이나 오늘 있었던 일을 편하게 말씀해 주세요. 다만 저는 의료 전문가가 아니어서 진단이나 치료, 처방은 할 수 없어요. 혹시 지금 스스로를 해치고 싶거나, 누군가에게 해를 입힐 것 같거나, 당장 위험한 상황이라면 119 또는 가까운 사람, 전문기관에 바로 도움을 요청해 주세요. 괜찮으시다면, 지금 어떤 마음이 가장 크게 느껴지는지부터 천천히 들려주세요."}}`
+
 func NewService(
 	records repository.MediaSessionRecordRepository,
 	runtime repository.RoomRuntimeRepository,
@@ -150,7 +152,9 @@ func realtimeControlConfigFromOptions(options ServiceOptions) realtimeControlCon
 	if label := strings.TrimSpace(options.RealtimeDataChannelLabel); label != "" {
 		realtime.dataChannelLabel = label
 	}
-	realtime.initialEvents = compactRealtimeInitialEvents(options.RealtimeInitialEvents)
+	if initialEvents := compactRealtimeInitialEvents(options.RealtimeInitialEvents); len(initialEvents) > 0 {
+		realtime.initialEvents = initialEvents
+	}
 	if options.RealtimeEventHistoryLimit > 0 {
 		realtime.realtimeEventHistoryLimit = options.RealtimeEventHistoryLimit
 	}
@@ -160,6 +164,7 @@ func realtimeControlConfigFromOptions(options ServiceOptions) realtimeControlCon
 func defaultRealtimeControlConfig() realtimeControlConfig {
 	return realtimeControlConfig{
 		dataChannelLabel:          "oai-events",
+		initialEvents:             []string{defaultOpeningDisclaimerEvent},
 		realtimeEventHistoryLimit: 10,
 	}
 }
