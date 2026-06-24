@@ -68,6 +68,28 @@ func TestRealtimeClientCreatesCallFromSDP(t *testing.T) {
 	if receivedSession["model"] != "gpt-realtime-2" {
 		t.Fatalf("session.model = %v, want gpt-realtime-2", receivedSession["model"])
 	}
+
+	audio, ok := receivedSession["audio"].(map[string]any)
+	if !ok {
+		t.Fatalf("session.audio = %#v, want object", receivedSession["audio"])
+	}
+	input, ok := audio["input"].(map[string]any)
+	if !ok {
+		t.Fatalf("session.audio.input = %#v, want object", audio["input"])
+	}
+	turnDetection, ok := input["turn_detection"].(map[string]any)
+	if !ok {
+		t.Fatalf("session.audio.input.turn_detection = %#v, want object", input["turn_detection"])
+	}
+	if turnDetection["type"] != "server_vad" {
+		t.Fatalf("turn_detection.type = %v, want server_vad", turnDetection["type"])
+	}
+	if turnDetection["create_response"] != true {
+		t.Fatalf("turn_detection.create_response = %v, want true", turnDetection["create_response"])
+	}
+	if turnDetection["interrupt_response"] != false {
+		t.Fatalf("turn_detection.interrupt_response = %v, want false", turnDetection["interrupt_response"])
+	}
 }
 
 func TestRealtimeClientRejectsEmptySDP(t *testing.T) {
