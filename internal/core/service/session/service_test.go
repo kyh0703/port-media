@@ -2,7 +2,9 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -802,6 +804,67 @@ func TestServiceConnectsOpenAIParticipantForClientJoin(t *testing.T) {
 	}
 	if !foundAgent {
 		t.Fatal("openai participant not found")
+	}
+}
+
+func TestServiceUsesDefaultOpenAIRealtimeOpeningDisclaimer(t *testing.T) {
+	records := newMemoryMediaSessionRecordRepositoryForTest()
+	runtime := newMemoryRoomRuntimeRepositoryForTest()
+	media := &fakeMediaGateway{}
+	media.AcceptOfferReturns(&port.Peer{AnswerSDP: "answer-sdp"}, nil)
+	media.CreateOfferReturns(&port.PeerOffer{SDPOffer: "openai-offer-sdp"}, nil)
+	media.ApplyAnswerReturns(&port.Peer{}, nil)
+	provider := &fakeRealtimeProvider{}
+	provider.CreateCallReturns(port.CreateCallResult{SDPAnswer: "openai-answer-sdp", ProviderCallID: "rtc_123"}, nil)
+	states := &sessionfakes.FakeMediaSessionStateRepository{}
+	states.FindBySessionIDReturns(sessionquery.MediaSessionState{}, false, nil)
+	svc := NewServiceWithOptions(records, runtime, states, media, provider, ServiceOptions{})
+	createSessionForTest(t, svc)
+
+	_, err := svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+		UserID:         "user-1",
+		SDP:            "offer-sdp",
+	})
+	if err != nil {
+		t.Fatalf("JoinSession() error = %v", err)
+	}
+
+	_, createdInput := media.CreateOfferArgsForCall(0)
+	if len(createdInput.InitialDataMessages) != 1 {
+		t.Fatalf("InitialDataMessages len = %d, want 1", len(createdInput.InitialDataMessages))
+	}
+
+	var event map[string]any
+	if err := json.Unmarshal([]byte(createdInput.InitialDataMessages[0]), &event); err != nil {
+		t.Fatalf("decode default initial event: %v", err)
+	}
+	if event["type"] != "response.create" {
+		t.Fatalf("event.type = %v, want response.create", event["type"])
+	}
+	response, ok := event["response"].(map[string]any)
+	if !ok {
+		t.Fatalf("event.response = %#v, want object", event["response"])
+	}
+	instructions, ok := response["instructions"].(string)
+	if !ok {
+		t.Fatalf("response.instructions = %#v, want string", response["instructions"])
+	}
+	for _, want := range []string{"AI 정서 지원 상담원", "의료 전문가", "119", "전문기관", "지금 어떤 마음"} {
+		if !strings.Contains(instructions, want) {
+			t.Fatalf("instructions missing %q: %q", want, instructions)
+		}
+	}
+}
+
+func TestServiceIgnoresBlankConfiguredRealtimeInitialEvents(t *testing.T) {
+	realtime := realtimeControlConfigFromOptions(ServiceOptions{
+		RealtimeInitialEvents: []string{" ", "\t"},
+	})
+
+	if len(realtime.initialEvents) != 1 {
+		t.Fatalf("initialEvents len = %d, want default event", len(realtime.initialEvents))
 	}
 }
 
