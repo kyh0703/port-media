@@ -69,10 +69,7 @@ func (c *RealtimeClient) CreateCall(ctx context.Context, input CreateCallInput) 
 		return CreateCallResult{}, fmt.Errorf("write sdp field: %w", err)
 	}
 
-	session, err := json.Marshal(map[string]any{
-		"type":  "realtime",
-		"model": c.model,
-	})
+	session, err := json.Marshal(realtimeSessionPayload(c.model))
 	if err != nil {
 		return CreateCallResult{}, fmt.Errorf("encode session: %w", err)
 	}
@@ -110,6 +107,22 @@ func (c *RealtimeClient) CreateCall(ctx context.Context, input CreateCallInput) 
 		SDPAnswer:      string(answer),
 		ProviderCallID: providerCallID(res.Header.Get("Location")),
 	}, nil
+}
+
+func realtimeSessionPayload(model string) map[string]any {
+	return map[string]any{
+		"type":  "realtime",
+		"model": model,
+		"audio": map[string]any{
+			"input": map[string]any{
+				"turn_detection": map[string]any{
+					"type":               "server_vad",
+					"create_response":    true,
+					"interrupt_response": false,
+				},
+			},
+		},
+	}
 }
 
 func (c *RealtimeClient) HangupCall(ctx context.Context, providerCallID string) error {
