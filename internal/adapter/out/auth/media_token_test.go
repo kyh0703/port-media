@@ -22,9 +22,12 @@ func (s fakeMediaTokenStore) Get(ctx context.Context, token string) (coreport.Me
 func TestMediaTokenVerifierReturnsRedisBackedClaims(t *testing.T) {
 	verifier := NewMediaTokenVerifier(fakeMediaTokenStore{
 		token: coreport.MediaToken{
-			SessionID:      "session-1",
-			ConversationID: "conversation-1",
-			UserID:         "user-1",
+			SessionID:       "session-1",
+			ConversationID:  "conversation-1",
+			RoomID:          "room-1",
+			ParticipantID:   "participant-1",
+			ParticipantRole: "user",
+			UserID:          "user-1",
 		},
 	})
 
@@ -41,6 +44,12 @@ func TestMediaTokenVerifierReturnsRedisBackedClaims(t *testing.T) {
 	}
 	if claims.UserID != "user-1" {
 		t.Fatalf("UserID = %q, want user-1", claims.UserID)
+	}
+	if claims.ParticipantID != "participant-1" {
+		t.Fatalf("ParticipantID = %q, want participant-1", claims.ParticipantID)
+	}
+	if claims.ParticipantRole != "user" {
+		t.Fatalf("ParticipantRole = %q, want user", claims.ParticipantRole)
 	}
 }
 

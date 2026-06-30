@@ -13,6 +13,7 @@ var Module = fx.Module(
 	"app",
 	fx.Provide(
 		NewSessionServiceOptions,
+		sessionservice.NewNoopProviderEventNormalizer,
 		fx.Annotate(
 			sessionservice.NewServiceWithOptionsLoggerAndPublisher,
 			fx.As(new(sessionservice.Service)),

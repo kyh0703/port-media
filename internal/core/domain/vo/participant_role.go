@@ -4,9 +4,9 @@ type ParticipantRole string
 type TrackKind string
 
 const (
-	ParticipantRoleClient      ParticipantRole = "client"
-	ParticipantRoleOpenAIAgent ParticipantRole = "openai_agent"
-	ParticipantRoleMonitor     ParticipantRole = "monitor"
+	ParticipantRoleUser    ParticipantRole = "user"
+	ParticipantRoleAgent   ParticipantRole = "agent"
+	ParticipantRoleMonitor ParticipantRole = "monitor"
 )
 
 const (

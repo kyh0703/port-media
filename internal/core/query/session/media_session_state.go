@@ -14,7 +14,6 @@ type MediaSessionState struct {
 	Status                vo.RoomStatus
 	ConnectionState       vo.ConnectionState
 	MediaState            vo.TrackState
-	OpenAIProviderCallID  string
 	Participants          int
 	ParticipantStates     []MediaSessionParticipantState
 	LastRealtimeEventType string

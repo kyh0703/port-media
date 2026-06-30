@@ -6,7 +6,6 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/lifecycle"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/out/auth"
-	"github.com/kyh0703/portfoilo-media/internal/adapter/out/openai"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/out/persistence"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/out/repository"
 	rtc "github.com/kyh0703/portfoilo-media/internal/adapter/out/webrtc"
@@ -19,7 +18,6 @@ func main() {
 		configs.Module,
 		pkg.Module,
 		auth.Module,
-		openai.Module,
 		rtc.Module,
 		persistence.Module,
 		repository.Module,

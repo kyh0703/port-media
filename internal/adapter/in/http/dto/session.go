@@ -13,7 +13,6 @@ type GetSessionStatusResponse struct {
 	Status                string                     `json:"status"`
 	ConnectionState       string                     `json:"connection_state"`
 	MediaState            string                     `json:"media_state"`
-	OpenAIProviderCallID  string                     `json:"openai_provider_call_id"`
 	Participants          int                        `json:"participants"`
 	ParticipantStates     []ParticipantStateResponse `json:"participant_states"`
 	LastRealtimeEventType string                     `json:"last_realtime_event_type"`

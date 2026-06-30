@@ -7,7 +7,6 @@ type Config struct {
 	App         AppConfig         `envPrefix:"APP_"`
 	Server      ServerConfig      `envPrefix:"SERVER_"`
 	Log         LogConfig         `envPrefix:"LOG_"`
-	OpenAI      OpenAIConfig      `envPrefix:"OPENAI_"`
 	Database    DatabaseConfig    `envPrefix:"DATABASE_"`
 	Redis       RedisConfig       `envPrefix:"REDIS_"`
 	MediaServer MediaServerConfig `envPrefix:"MEDIA_SERVER_"`
@@ -39,14 +38,6 @@ type CORSConfig struct {
 type LogConfig struct {
 	Level       string `env:"LEVEL" envDefault:"info"`
 	Development bool   `env:"DEVELOPMENT" envDefault:"false"`
-}
-
-type OpenAIConfig struct {
-	RealtimeBaseURL          string   `env:"REALTIME_BASE_URL" envDefault:"https://api.openai.com"`
-	RealtimeModel            string   `env:"REALTIME_MODEL" envDefault:"gpt-realtime-2"`
-	RealtimeDataChannelLabel string   `env:"REALTIME_DATA_CHANNEL_LABEL" envDefault:"oai-events"`
-	RealtimeInitialEvents    []string `env:"REALTIME_INITIAL_EVENTS"`
-	APIKey                   string   `env:"API_KEY,notEmpty"`
 }
 
 type DatabaseConfig struct {

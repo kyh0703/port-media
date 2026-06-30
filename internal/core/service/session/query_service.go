@@ -21,7 +21,6 @@ func (s *service) GetSessionStatus(ctx context.Context, req sessionio.GetSession
 		Status:                string(state.Status),
 		ConnectionState:       string(state.ConnectionState),
 		MediaState:            string(state.MediaState),
-		OpenAIProviderCallID:  state.OpenAIProviderCallID,
 		Participants:          state.Participants,
 		ParticipantStates:     participantStateResults(state.ParticipantStates),
 		LastRealtimeEventType: state.LastRealtimeEventType,

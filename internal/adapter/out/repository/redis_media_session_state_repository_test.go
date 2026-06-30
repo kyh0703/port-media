@@ -29,19 +29,18 @@ func TestRedisMediaSessionStateRepositorySavesStateWithTTL(t *testing.T) {
 	startedAt := time.Date(2026, 5, 19, 10, 0, 0, 0, time.UTC)
 	lastActiveAt := time.Date(2026, 5, 19, 10, 1, 0, 0, time.UTC)
 	err = repo.Save(context.Background(), sessionquery.MediaSessionState{
-		SessionID:            vo.SessionID("session-1"),
-		ConversationID:       vo.ConversationID("conversation-1"),
-		UserID:               "user-1",
-		RoomID:               vo.RoomID("room-1"),
-		Status:               vo.RoomStatusActive,
-		ConnectionState:      vo.ConnectionStateConnected,
-		MediaState:           vo.TrackStateActive,
-		OpenAIProviderCallID: "rtc_123",
-		Participants:         2,
+		SessionID:       vo.SessionID("session-1"),
+		ConversationID:  vo.ConversationID("conversation-1"),
+		UserID:          "user-1",
+		RoomID:          vo.RoomID("room-1"),
+		Status:          vo.RoomStatusActive,
+		ConnectionState: vo.ConnectionStateConnected,
+		MediaState:      vo.TrackStateActive,
+		Participants:    2,
 		ParticipantStates: []sessionquery.MediaSessionParticipantState{
 			{
 				ID:              vo.ParticipantID("client-1"),
-				Role:            vo.ParticipantRoleClient,
+				Role:            vo.ParticipantRoleUser,
 				AudioMode:       "publisher",
 				ConnectionState: vo.ConnectionStateConnected,
 				Tracks:          1,
@@ -133,19 +132,18 @@ func TestRedisMediaSessionStateRepositoryFindsState(t *testing.T) {
 	startedAt := time.Date(2026, 5, 19, 10, 0, 0, 0, time.UTC)
 	updatedAt := time.Date(2026, 5, 19, 10, 1, 0, 0, time.UTC)
 	err = repo.Save(context.Background(), sessionquery.MediaSessionState{
-		SessionID:            vo.SessionID("session-1"),
-		ConversationID:       vo.ConversationID("conversation-1"),
-		UserID:               "user-1",
-		RoomID:               vo.RoomID("room-1"),
-		Status:               vo.RoomStatusActive,
-		ConnectionState:      vo.ConnectionStateConnected,
-		MediaState:           vo.TrackStateActive,
-		OpenAIProviderCallID: "rtc_123",
-		Participants:         2,
+		SessionID:       vo.SessionID("session-1"),
+		ConversationID:  vo.ConversationID("conversation-1"),
+		UserID:          "user-1",
+		RoomID:          vo.RoomID("room-1"),
+		Status:          vo.RoomStatusActive,
+		ConnectionState: vo.ConnectionStateConnected,
+		MediaState:      vo.TrackStateActive,
+		Participants:    2,
 		ParticipantStates: []sessionquery.MediaSessionParticipantState{
 			{
 				ID:              vo.ParticipantID("client-1"),
-				Role:            vo.ParticipantRoleClient,
+				Role:            vo.ParticipantRoleUser,
 				AudioMode:       "listener",
 				ConnectionState: vo.ConnectionStateConnected,
 				Tracks:          1,

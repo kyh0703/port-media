@@ -10,8 +10,6 @@ func NewSessionServiceOptions(cfg *configs.Config) sessionservice.ServiceOptions
 		return sessionservice.ServiceOptions{}
 	}
 	return sessionservice.ServiceOptions{
-		RealtimeDataChannelLabel:  cfg.OpenAI.RealtimeDataChannelLabel,
-		RealtimeInitialEvents:     cfg.OpenAI.RealtimeInitialEvents,
 		RealtimeEventHistoryLimit: cfg.Realtime.RealtimeEventHistoryLimit,
 	}
 }

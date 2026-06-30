@@ -36,7 +36,6 @@ func (r *RedisMediaSessionStateRepository) Save(ctx context.Context, state sessi
 		Status:                string(state.Status),
 		ConnectionState:       string(state.ConnectionState),
 		MediaState:            string(state.MediaState),
-		OpenAIProviderCallID:  state.OpenAIProviderCallID,
 		Participants:          state.Participants,
 		ParticipantStates:     toMediaSessionParticipantPayloads(state.ParticipantStates),
 		LastRealtimeEventType: state.LastRealtimeEventType,
@@ -77,7 +76,6 @@ func (r *RedisMediaSessionStateRepository) FindBySessionID(ctx context.Context, 
 		Status:                vo.RoomStatus(payload.Status),
 		ConnectionState:       vo.ConnectionState(payload.ConnectionState),
 		MediaState:            vo.TrackState(payload.MediaState),
-		OpenAIProviderCallID:  payload.OpenAIProviderCallID,
 		Participants:          payload.Participants,
 		ParticipantStates:     toMediaSessionParticipantStates(payload.ParticipantStates),
 		LastRealtimeEventType: payload.LastRealtimeEventType,
@@ -107,7 +105,6 @@ type mediaSessionStatePayload struct {
 	Status                string                         `json:"status"`
 	ConnectionState       string                         `json:"connection_state"`
 	MediaState            string                         `json:"media_state"`
-	OpenAIProviderCallID  string                         `json:"openai_provider_call_id"`
 	Participants          int                            `json:"participants"`
 	ParticipantStates     []mediaSessionParticipantState `json:"participant_states"`
 	LastRealtimeEventType string                         `json:"last_realtime_event_type,omitempty"`

@@ -18,51 +18,62 @@ var opusCapability = pionwebrtc.RTPCodecCapability{
 type audioBridge struct {
 	sessionID vo.SessionID
 
-	mu             sync.RWMutex
-	clientToOpenAI *pionwebrtc.TrackLocalStaticRTP
-	openAIToClient *pionwebrtc.TrackLocalStaticRTP
+	mu          sync.RWMutex
+	userToAgent *pionwebrtc.TrackLocalStaticRTP
+	agentToUser *pionwebrtc.TrackLocalStaticRTP
 }
 
-func (b *audioBridge) ensureClientToOpenAITrack() (*pionwebrtc.TrackLocalStaticRTP, error) {
+func (b *audioBridge) ensureUserToAgentTrack() (*pionwebrtc.TrackLocalStaticRTP, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if b.clientToOpenAI != nil {
-		return b.clientToOpenAI, nil
+	if b.userToAgent != nil {
+		return b.userToAgent, nil
 	}
 
 	track, err := pionwebrtc.NewTrackLocalStaticRTP(
 		opusCapability,
-		fmt.Sprintf("%s-client-to-openai-audio", b.sessionID),
+		fmt.Sprintf("%s-user-to-agent-audio", b.sessionID),
 		string(b.sessionID),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create client-to-openai audio track: %w", err)
+		return nil, fmt.Errorf("create user-to-agent audio track: %w", err)
 	}
 
-	b.clientToOpenAI = track
+	b.userToAgent = track
 	return track, nil
 }
 
-func (b *audioBridge) ensureOpenAIToClientTrack() (*pionwebrtc.TrackLocalStaticRTP, error) {
+func (b *audioBridge) ensureAgentToUserTrack() (*pionwebrtc.TrackLocalStaticRTP, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if b.openAIToClient != nil {
-		return b.openAIToClient, nil
+	if b.agentToUser != nil {
+		return b.agentToUser, nil
 	}
 
 	track, err := pionwebrtc.NewTrackLocalStaticRTP(
 		opusCapability,
-		fmt.Sprintf("%s-openai-to-client-audio", b.sessionID),
+		fmt.Sprintf("%s-agent-to-user-audio", b.sessionID),
 		string(b.sessionID),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create openai-to-client audio track: %w", err)
+		return nil, fmt.Errorf("create agent-to-user audio track: %w", err)
 	}
 
-	b.openAIToClient = track
+	b.agentToUser = track
 	return track, nil
+}
+
+func (b *audioBridge) ensureSubscriberTrack(role vo.ParticipantRole) (*pionwebrtc.TrackLocalStaticRTP, error) {
+	switch role {
+	case vo.ParticipantRoleUser:
+		return b.ensureAgentToUserTrack()
+	case vo.ParticipantRoleAgent:
+		return b.ensureUserToAgentTrack()
+	default:
+		return nil, fmt.Errorf("unsupported subscriber role %q", role)
+	}
 }
 
 func (b *audioBridge) destinationFor(sourceRole vo.ParticipantRole) *pionwebrtc.TrackLocalStaticRTP {
@@ -70,10 +81,10 @@ func (b *audioBridge) destinationFor(sourceRole vo.ParticipantRole) *pionwebrtc.
 	defer b.mu.RUnlock()
 
 	switch sourceRole {
-	case vo.ParticipantRoleClient:
-		return b.clientToOpenAI
-	case vo.ParticipantRoleOpenAIAgent:
-		return b.openAIToClient
+	case vo.ParticipantRoleUser:
+		return b.userToAgent
+	case vo.ParticipantRoleAgent:
+		return b.agentToUser
 	default:
 		return nil
 	}

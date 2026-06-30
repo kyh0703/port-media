@@ -42,7 +42,7 @@ func TestEngineHandlesClientAudioOffer(t *testing.T) {
 	peer, err := engine.AcceptOffer(context.Background(), OfferInput{
 		SessionID:     vo.SessionID("session-1"),
 		ParticipantID: vo.ParticipantID("client-1"),
-		Role:          vo.ParticipantRoleClient,
+		Role:          vo.ParticipantRoleUser,
 		SDP:           offer.SDP,
 	})
 	if err != nil {
@@ -55,7 +55,7 @@ func TestEngineHandlesClientAudioOffer(t *testing.T) {
 	if peer.AnswerSDP == "" {
 		t.Fatal("AcceptOffer() returned empty answer SDP")
 	}
-	if peer.Role != vo.ParticipantRoleClient {
-		t.Fatalf("peer role = %q, want %q", peer.Role, vo.ParticipantRoleClient)
+	if peer.Role != vo.ParticipantRoleUser {
+		t.Fatalf("peer role = %q, want %q", peer.Role, vo.ParticipantRoleUser)
 	}
 }
