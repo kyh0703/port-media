@@ -22,7 +22,7 @@ func TestValidateConfigAcceptsNodeID(t *testing.T) {
 func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	t.Setenv("NODE_ID", "1")
 	t.Setenv("OPENAI_API_KEY", "test-api-key")
-	t.Setenv("SERVER_PORT", "9090")
+	t.Setenv("PORT", "9090")
 	t.Setenv("SERVER_CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
 	t.Setenv("LOG_DEVELOPMENT", "true")
 	t.Setenv("DATABASE_URL", "postgres://media:secret@db.example.test:5432/media?sslmode=require")
@@ -70,20 +70,20 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 func TestNewConfigLoadsDotEnvFile(t *testing.T) {
 	restoreEnv(t, "NODE_ID")
 	restoreEnv(t, "OPENAI_API_KEY")
-	restoreEnv(t, "SERVER_PORT")
+	restoreEnv(t, "PORT")
 	if err := os.Unsetenv("NODE_ID"); err != nil {
 		t.Fatalf("Unsetenv(NODE_ID) error = %v", err)
 	}
 	if err := os.Unsetenv("OPENAI_API_KEY"); err != nil {
 		t.Fatalf("Unsetenv(OPENAI_API_KEY) error = %v", err)
 	}
-	if err := os.Unsetenv("SERVER_PORT"); err != nil {
-		t.Fatalf("Unsetenv(SERVER_PORT) error = %v", err)
+	if err := os.Unsetenv("PORT"); err != nil {
+		t.Fatalf("Unsetenv(PORT) error = %v", err)
 	}
 
 	dir := t.TempDir()
 	t.Chdir(dir)
-	if err := os.WriteFile(".env", []byte("NODE_ID=7\nOPENAI_API_KEY=dot-env-key\nSERVER_PORT=7070\n"), 0o600); err != nil {
+	if err := os.WriteFile(".env", []byte("NODE_ID=7\nOPENAI_API_KEY=dot-env-key\nPORT=7070\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(.env) error = %v", err)
 	}
 
@@ -103,6 +103,10 @@ func TestNewConfigLoadsDotEnvFile(t *testing.T) {
 }
 
 func TestNewConfigLoadsDefaults(t *testing.T) {
+	restoreEnv(t, "PORT")
+	if err := os.Unsetenv("PORT"); err != nil {
+		t.Fatalf("Unsetenv(PORT) error = %v", err)
+	}
 	t.Setenv("NODE_ID", "1")
 	t.Setenv("OPENAI_API_KEY", "test-api-key")
 
@@ -130,6 +134,49 @@ func TestNewConfigLoadsDefaults(t *testing.T) {
 	}
 	if cfg.Database.URL != "postgres://postgres:postgres@localhost:5432/portfoilo_media?sslmode=disable" {
 		t.Fatalf("Database.URL = %q, want default postgres URL", cfg.Database.URL)
+	}
+}
+
+func TestNewConfigLoadsPort(t *testing.T) {
+	t.Setenv("NODE_ID", "1")
+	t.Setenv("OPENAI_API_KEY", "test-api-key")
+	t.Setenv("PORT", "9091")
+
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error = %v", err)
+	}
+	if cfg.Server.Port != 9091 {
+		t.Fatalf("Server.Port = %d, want PORT 9091", cfg.Server.Port)
+	}
+}
+
+func TestNewConfigIgnoresServerPort(t *testing.T) {
+	restoreEnv(t, "PORT")
+	if err := os.Unsetenv("PORT"); err != nil {
+		t.Fatalf("Unsetenv(PORT) error = %v", err)
+	}
+	t.Setenv("NODE_ID", "1")
+	t.Setenv("OPENAI_API_KEY", "test-api-key")
+	t.Setenv("SERVER_PORT", "9091")
+
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error = %v", err)
+	}
+	if cfg.Server.Port != 8080 {
+		t.Fatalf("Server.Port = %d, want default 8080", cfg.Server.Port)
+	}
+}
+
+func TestNewConfigRejectsNonNumericPort(t *testing.T) {
+	t.Setenv("NODE_ID", "1")
+	t.Setenv("OPENAI_API_KEY", "test-api-key")
+	t.Setenv("PORT", "not-a-port")
+
+	_, err := NewConfig()
+	if err == nil {
+		t.Fatal("NewConfig() error is nil, want PORT parse error")
 	}
 }
 

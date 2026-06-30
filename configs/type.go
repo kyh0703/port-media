@@ -23,7 +23,7 @@ type AppConfig struct {
 
 type ServerConfig struct {
 	Host         string        `env:"HOST" envDefault:"0.0.0.0"`
-	Port         int           `env:"PORT" envDefault:"8080"`
+	Port         int           `env:"-"`
 	ReadTimeout  time.Duration `env:"READ_TIMEOUT" envDefault:"10s"`
 	WriteTimeout time.Duration `env:"WRITE_TIMEOUT" envDefault:"10s"`
 	CORS         CORSConfig    `envPrefix:"CORS_"`
