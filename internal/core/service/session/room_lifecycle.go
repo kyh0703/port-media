@@ -62,7 +62,6 @@ func (s *service) ShutdownActiveRooms(ctx context.Context) (int, error) {
 func (s *service) failRoom(ctx context.Context, room entity.Room, userID string, now time.Time, reason string, fields ...zap.Field) error {
 	room.Fail(now)
 	cleanupErr := errors.Join(
-		s.hangupOpenAIParticipants(ctx, room),
 		s.media.CloseSession(ctx, room.SessionID),
 		s.runtime.Delete(ctx, room.ID),
 	)
@@ -88,7 +87,6 @@ func (s *service) failRoom(ctx context.Context, room entity.Room, userID string,
 
 func (s *service) closeRoom(ctx context.Context, room entity.Room, userID string, now time.Time, reason string) error {
 	cleanupErr := errors.Join(
-		s.hangupOpenAIParticipants(ctx, room),
 		s.media.CloseSession(ctx, room.SessionID),
 	)
 	if cleanupErr != nil {
@@ -115,15 +113,4 @@ func (s *service) closeRoom(ctx context.Context, room entity.Room, userID string
 		zap.Int("participants", room.ParticipantCount()),
 	)
 	return errors.Join(persistErr, cleanupErr)
-}
-
-func (s *service) hangupOpenAIParticipants(ctx context.Context, room entity.Room) error {
-	for _, participant := range room.Participants() {
-		if participant.Role == vo.ParticipantRoleOpenAIAgent && participant.ProviderCallID != "" {
-			if err := s.provider.HangupCall(ctx, participant.ProviderCallID); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }

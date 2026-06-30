@@ -37,7 +37,7 @@ func (roomStatsQuery) Build(rooms []entity.Room) sessionio.RuntimeStatsResponse 
 		publishers, listeners := countClientAudioModes(room)
 		for _, participant := range room.Participants() {
 			stats.ByRole[string(participant.Role)]++
-			if participant.Role == vo.ParticipantRoleClient {
+			if participant.Role == vo.ParticipantRoleUser {
 				stats.ByAudioMode[participantAudioMode(participant)]++
 			}
 		}

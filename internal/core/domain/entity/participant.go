@@ -7,14 +7,13 @@ import (
 )
 
 type Participant struct {
-	ID             vo.ParticipantID
-	Role           vo.ParticipantRole
-	State          vo.ConnectionState
-	PublishAudio   bool
-	Tracks         map[vo.TrackID]Track
-	ProviderCallID string
-	JoinedAt       time.Time
-	UpdatedAt      time.Time
+	ID           vo.ParticipantID
+	Role         vo.ParticipantRole
+	State        vo.ConnectionState
+	PublishAudio bool
+	Tracks       map[vo.TrackID]Track
+	JoinedAt     time.Time
+	UpdatedAt    time.Time
 }
 
 func NewParticipant(id vo.ParticipantID, role vo.ParticipantRole, now time.Time) Participant {
@@ -35,11 +34,6 @@ func (p Participant) Clone() Participant {
 		clone.Tracks[id] = track
 	}
 	return clone
-}
-
-func (p *Participant) SetProviderCallID(providerCallID string, now time.Time) {
-	p.ProviderCallID = providerCallID
-	p.UpdatedAt = now
 }
 
 func (p *Participant) SetPublishAudio(publishAudio bool, now time.Time) {

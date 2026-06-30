@@ -14,7 +14,6 @@ type GetSessionStatusResult struct {
 	Status                string
 	ConnectionState       string
 	MediaState            string
-	OpenAIProviderCallID  string
 	Participants          int
 	ParticipantStates     []ParticipantStateResult
 	LastRealtimeEventType string

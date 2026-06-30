@@ -11,7 +11,6 @@ var (
 	ErrRoomNotJoinable          = errors.New("room is not joinable")
 	ErrParticipantRoleMismatch  = errors.New("participant role mismatch")
 	ErrParticipantAlreadyJoined = errors.New("participant already joined")
-	ErrOpenAIAgentAlreadyJoined = errors.New("openai agent already joined")
 )
 
 type Room struct {
@@ -48,19 +47,11 @@ func (r Room) CanJoinParticipants() bool {
 	return r.Status == vo.RoomStatusCreated || r.Status == vo.RoomStatusActive
 }
 
-func (r *Room) JoinClient(participant Participant, now time.Time) error {
-	if participant.Role != vo.ParticipantRoleClient {
+func (r *Room) JoinParticipant(participant Participant, now time.Time) error {
+	switch participant.Role {
+	case vo.ParticipantRoleUser, vo.ParticipantRoleAgent, vo.ParticipantRoleMonitor:
+	default:
 		return ErrParticipantRoleMismatch
-	}
-	return r.addParticipant(participant, now)
-}
-
-func (r *Room) AttachOpenAIAgent(participant Participant, now time.Time) error {
-	if participant.Role != vo.ParticipantRoleOpenAIAgent {
-		return ErrParticipantRoleMismatch
-	}
-	if r.HasOpenAIAgent() {
-		return ErrOpenAIAgentAlreadyJoined
 	}
 	return r.addParticipant(participant, now)
 }
@@ -127,19 +118,6 @@ func (r *Room) RecordRealtimeEvent(eventType string, now time.Time) {
 	r.LastRealtimeEventType = eventType
 	r.LastRealtimeEventAt = now
 	r.UpdatedAt = now
-}
-
-func (r Room) HasOpenAIAgent() bool {
-	return r.hasParticipantRole(vo.ParticipantRoleOpenAIAgent)
-}
-
-func (r Room) hasParticipantRole(role vo.ParticipantRole) bool {
-	for _, participant := range r.participants {
-		if participant.Role == role {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *Room) UpdateParticipantState(participantID vo.ParticipantID, state vo.ConnectionState, now time.Time) bool {

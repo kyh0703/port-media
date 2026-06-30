@@ -1,11 +1,13 @@
 package sessionio
 
 type JoinSessionCommand struct {
-	SessionID      string
-	ConversationID string
-	UserID         string
-	SDP            string
-	AudioMode      AudioMode
+	SessionID       string
+	ConversationID  string
+	ParticipantID   string
+	ParticipantRole string
+	UserID          string
+	SDP             string
+	AudioMode       AudioMode
 }
 
 type JoinSessionResult struct {

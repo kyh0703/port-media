@@ -16,18 +16,17 @@ type mediaSessionProjector struct {
 
 func (p mediaSessionProjector) Project(room entity.Room, userID string, now time.Time) sessionquery.MediaSessionState {
 	return sessionquery.MediaSessionState{
-		SessionID:            room.SessionID,
-		ConversationID:       room.ConversationID,
-		UserID:               coalesceUserID(userID, room.UserID),
-		RoomID:               room.ID,
-		Status:               room.Status,
-		ConnectionState:      roomConnectionState(room),
-		MediaState:           roomMediaState(room),
-		OpenAIProviderCallID: openAIProviderCallID(room),
-		Participants:         room.ParticipantCount(),
-		ParticipantStates:    mediaSessionParticipantStates(room),
-		StartedAt:            room.CreatedAt,
-		UpdatedAt:            now,
+		SessionID:         room.SessionID,
+		ConversationID:    room.ConversationID,
+		UserID:            coalesceUserID(userID, room.UserID),
+		RoomID:            room.ID,
+		Status:            room.Status,
+		ConnectionState:   roomConnectionState(room),
+		MediaState:        roomMediaState(room),
+		Participants:      room.ParticipantCount(),
+		ParticipantStates: mediaSessionParticipantStates(room),
+		StartedAt:         room.CreatedAt,
+		UpdatedAt:         now,
 	}
 }
 
@@ -197,7 +196,7 @@ func realtimeEventResults(events []sessionquery.RealtimeEvent) []sessionio.Realt
 
 func countClientAudioModes(room entity.Room) (publishers int, listeners int) {
 	for _, participant := range room.Participants() {
-		if participant.Role != vo.ParticipantRoleClient {
+		if participant.Role != vo.ParticipantRoleUser {
 			continue
 		}
 		if participant.PublishAudio {
@@ -210,7 +209,7 @@ func countClientAudioModes(room entity.Room) (publishers int, listeners int) {
 }
 
 func participantAudioMode(participant entity.Participant) string {
-	if participant.Role != vo.ParticipantRoleClient {
+	if participant.Role != vo.ParticipantRoleUser {
 		return ""
 	}
 	if participant.PublishAudio {

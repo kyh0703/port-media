@@ -14,10 +14,10 @@ func TestMemoryRoomRuntimeRepositoryCopiesRooms(t *testing.T) {
 	now := time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
 	repo := NewMemoryRoomRuntimeRepository()
 	room := entity.NewRoom(vo.RoomID("room-1"), vo.SessionID("session-1"), vo.ConversationID("conversation-1"), now)
-	client := entity.NewParticipant(vo.ParticipantID("client-1"), vo.ParticipantRoleClient, now)
+	client := entity.NewParticipant(vo.ParticipantID("client-1"), vo.ParticipantRoleUser, now)
 	client.AddTrack(entity.NewTrack(vo.TrackID("track-1"), vo.TrackKindAudio, now), now)
-	if err := room.JoinClient(client, now); err != nil {
-		t.Fatalf("JoinClient() error = %v", err)
+	if err := room.JoinParticipant(client, now); err != nil {
+		t.Fatalf("JoinParticipant() error = %v", err)
 	}
 
 	if err := repo.Save(ctx, room); err != nil {

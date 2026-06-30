@@ -37,7 +37,7 @@ func TestEngineClosesSessionPeersAndBridge(t *testing.T) {
 	peer, err := engine.AcceptOffer(context.Background(), OfferInput{
 		SessionID:     vo.SessionID("session-1"),
 		ParticipantID: vo.ParticipantID("client-1"),
-		Role:          vo.ParticipantRoleClient,
+		Role:          vo.ParticipantRoleUser,
 		SDP:           offer.SDP,
 	})
 	if err != nil {
@@ -88,7 +88,7 @@ func TestEngineClosesParticipantPeer(t *testing.T) {
 	peer, err := engine.AcceptOffer(context.Background(), OfferInput{
 		SessionID:     vo.SessionID("session-1"),
 		ParticipantID: vo.ParticipantID("client-1"),
-		Role:          vo.ParticipantRoleClient,
+		Role:          vo.ParticipantRoleUser,
 		SDP:           offer.SDP,
 	})
 	if err != nil {

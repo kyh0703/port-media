@@ -37,7 +37,7 @@ func TestEnginePreparesAudioBridgeTracks(t *testing.T) {
 	clientPeer, err := engine.AcceptOffer(context.Background(), OfferInput{
 		SessionID:     vo.SessionID("session-1"),
 		ParticipantID: vo.ParticipantID("client-1"),
-		Role:          vo.ParticipantRoleClient,
+		Role:          vo.ParticipantRoleUser,
 		SDP:           offer.SDP,
 	})
 	if err != nil {
@@ -47,32 +47,32 @@ func TestEnginePreparesAudioBridgeTracks(t *testing.T) {
 		_ = clientPeer.Close()
 	}()
 
-	openAIOffer, err := engine.CreateOffer(context.Background(), CreateOfferInput{
+	agentOffer, err := engine.CreateOffer(context.Background(), CreateOfferInput{
 		SessionID:     vo.SessionID("session-1"),
-		ParticipantID: vo.ParticipantID("openai-1"),
-		Role:          vo.ParticipantRoleOpenAIAgent,
+		ParticipantID: vo.ParticipantID("agent-1"),
+		Role:          vo.ParticipantRoleAgent,
 	})
 	if err != nil {
 		t.Fatalf("CreateOffer() error = %v", err)
 	}
 	defer func() {
-		_ = openAIOffer.Close()
+		_ = agentOffer.Close()
 	}()
 
 	bridge := engine.bridgeForSession(vo.SessionID("session-1"))
 	if bridge == nil {
 		t.Fatal("bridge not found")
 	}
-	if bridge.clientToOpenAI == nil {
-		t.Fatal("clientToOpenAI local track is nil")
+	if bridge.userToAgent == nil {
+		t.Fatal("userToAgent local track is nil")
 	}
-	if bridge.openAIToClient == nil {
-		t.Fatal("openAIToClient local track is nil")
+	if bridge.agentToUser == nil {
+		t.Fatal("agentToUser local track is nil")
 	}
-	if bridge.destinationFor(vo.ParticipantRoleClient) != bridge.clientToOpenAI {
-		t.Fatal("client remote track destination is not OpenAI local track")
+	if bridge.destinationFor(vo.ParticipantRoleUser) != bridge.userToAgent {
+		t.Fatal("user remote track destination is not agent local track")
 	}
-	if bridge.destinationFor(vo.ParticipantRoleOpenAIAgent) != bridge.openAIToClient {
-		t.Fatal("OpenAI remote track destination is not client local track")
+	if bridge.destinationFor(vo.ParticipantRoleAgent) != bridge.agentToUser {
+		t.Fatal("agent remote track destination is not user local track")
 	}
 }

@@ -12,9 +12,16 @@ var (
 )
 
 type MediaToken struct {
-	SessionID      string `json:"session_id"`
-	ConversationID string `json:"conversation_id"`
-	UserID         string `json:"user_id"`
+	SessionID       string `json:"session_id"`
+	ConversationID  string `json:"conversation_id"`
+	RoomID          string `json:"room_id"`
+	ParticipantID   string `json:"participant_id"`
+	ParticipantRole string `json:"participant_role"`
+	UserID          string `json:"user_id"`
+	Permissions     struct {
+		PublishAudio   bool `json:"publish_audio"`
+		SubscribeAudio bool `json:"subscribe_audio"`
+	} `json:"permissions"`
 }
 
 //go:generate go tool counterfeiter -generate

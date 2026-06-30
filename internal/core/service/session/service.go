@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"errors"
-	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +35,6 @@ type service struct {
 	runtime      repository.RoomRuntimeRepository
 	states       sessionquery.MediaSessionStateRepository
 	media        port.MediaGateway
-	provider     port.RealtimeProvider
 	events       port.ConversationEventPublisher
 	log          *zap.Logger
 	now          func() time.Time
@@ -49,27 +47,20 @@ type service struct {
 }
 
 type realtimeControlConfig struct {
-	dataChannelLabel          string
-	initialEvents             []string
 	realtimeEventHistoryLimit int
 }
 
 type ServiceOptions struct {
-	RealtimeDataChannelLabel  string
-	RealtimeInitialEvents     []string
 	RealtimeEventHistoryLimit int
 }
-
-const defaultOpeningDisclaimerEvent = `{"type":"response.create","response":{"instructions":"다음 안내를 자연스럽고 차분한 한국어 음성으로 말하세요. 안녕하세요. 저는 마음을 정리하는 데 도움을 드리는 AI 정서 지원 상담원이에요. 지금 느끼는 감정이나 오늘 있었던 일을 편하게 말씀해 주세요. 다만 저는 의료 전문가가 아니어서 진단이나 치료, 처방은 할 수 없어요. 혹시 지금 스스로를 해치고 싶거나, 누군가에게 해를 입힐 것 같거나, 당장 위험한 상황이라면 119 또는 가까운 사람, 전문기관에 바로 도움을 요청해 주세요. 괜찮으시다면, 지금 어떤 마음이 가장 크게 느껴지는지부터 천천히 들려주세요."}}`
 
 func NewService(
 	records repository.MediaSessionRecordRepository,
 	runtime repository.RoomRuntimeRepository,
 	states sessionquery.MediaSessionStateRepository,
 	media port.MediaGateway,
-	provider port.RealtimeProvider,
 ) Service {
-	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, nil, defaultRealtimeControlConfig(), zap.NewNop())
+	return newService(records, runtime, states, media, noopConversationEventPublisher{}, nil, defaultRealtimeControlConfig(), zap.NewNop())
 }
 
 func NewServiceWithOptions(
@@ -77,10 +68,9 @@ func NewServiceWithOptions(
 	runtime repository.RoomRuntimeRepository,
 	states sessionquery.MediaSessionStateRepository,
 	media port.MediaGateway,
-	provider port.RealtimeProvider,
 	options ServiceOptions,
 ) Service {
-	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, nil, realtimeControlConfigFromOptions(options), zap.NewNop())
+	return newService(records, runtime, states, media, noopConversationEventPublisher{}, nil, realtimeControlConfigFromOptions(options), zap.NewNop())
 }
 
 func NewServiceWithOptionsAndLogger(
@@ -88,11 +78,10 @@ func NewServiceWithOptionsAndLogger(
 	runtime repository.RoomRuntimeRepository,
 	states sessionquery.MediaSessionStateRepository,
 	media port.MediaGateway,
-	provider port.RealtimeProvider,
 	options ServiceOptions,
 	log *zap.Logger,
 ) Service {
-	return newService(records, runtime, states, media, provider, noopConversationEventPublisher{}, nil, realtimeControlConfigFromOptions(options), log)
+	return newService(records, runtime, states, media, noopConversationEventPublisher{}, nil, realtimeControlConfigFromOptions(options), log)
 }
 
 func NewServiceWithOptionsLoggerAndPublisher(
@@ -100,13 +89,12 @@ func NewServiceWithOptionsLoggerAndPublisher(
 	runtime repository.RoomRuntimeRepository,
 	states sessionquery.MediaSessionStateRepository,
 	media port.MediaGateway,
-	provider port.RealtimeProvider,
 	events port.ConversationEventPublisher,
 	eventsIn port.ProviderEventNormalizer,
 	options ServiceOptions,
 	log *zap.Logger,
 ) Service {
-	return newService(records, runtime, states, media, provider, events, eventsIn, realtimeControlConfigFromOptions(options), log)
+	return newService(records, runtime, states, media, events, eventsIn, realtimeControlConfigFromOptions(options), log)
 }
 
 func newService(
@@ -114,7 +102,6 @@ func newService(
 	runtime repository.RoomRuntimeRepository,
 	states sessionquery.MediaSessionStateRepository,
 	media port.MediaGateway,
-	provider port.RealtimeProvider,
 	events port.ConversationEventPublisher,
 	eventsIn port.ProviderEventNormalizer,
 	realtime realtimeControlConfig,
@@ -134,7 +121,6 @@ func newService(
 		runtime:      runtime,
 		states:       states,
 		media:        media,
-		provider:     provider,
 		events:       events,
 		log:          log,
 		now:          time.Now,
@@ -147,14 +133,12 @@ func newService(
 	return svc
 }
 
+func NewNoopProviderEventNormalizer() port.ProviderEventNormalizer {
+	return noopProviderEventNormalizer{}
+}
+
 func realtimeControlConfigFromOptions(options ServiceOptions) realtimeControlConfig {
 	realtime := defaultRealtimeControlConfig()
-	if label := strings.TrimSpace(options.RealtimeDataChannelLabel); label != "" {
-		realtime.dataChannelLabel = label
-	}
-	if initialEvents := compactRealtimeInitialEvents(options.RealtimeInitialEvents); len(initialEvents) > 0 {
-		realtime.initialEvents = initialEvents
-	}
 	if options.RealtimeEventHistoryLimit > 0 {
 		realtime.realtimeEventHistoryLimit = options.RealtimeEventHistoryLimit
 	}
@@ -163,22 +147,8 @@ func realtimeControlConfigFromOptions(options ServiceOptions) realtimeControlCon
 
 func defaultRealtimeControlConfig() realtimeControlConfig {
 	return realtimeControlConfig{
-		dataChannelLabel:          "oai-events",
-		initialEvents:             []string{defaultOpeningDisclaimerEvent},
 		realtimeEventHistoryLimit: 10,
 	}
-}
-
-func compactRealtimeInitialEvents(events []string) []string {
-	compacted := make([]string, 0, len(events))
-	for _, event := range events {
-		event = strings.TrimSpace(event)
-		if event == "" {
-			continue
-		}
-		compacted = append(compacted, event)
-	}
-	return compacted
 }
 
 func (s *service) CreateSession(ctx context.Context, req sessionio.CreateSessionRequest) (sessionio.CreateSessionResponse, error) {
@@ -220,17 +190,13 @@ func (s *service) JoinSession(ctx context.Context, req sessionio.JoinSessionComm
 	publishAudio := req.PublishesAudio()
 	room.SetUserID(req.UserID, now)
 
-	participant, peer, err := s.acceptClientParticipant(ctx, sessionID, req.SDP, publishAudio, now)
+	participant, peer, err := s.acceptParticipant(ctx, sessionID, req, publishAudio, now)
 	if err != nil {
 		return sessionio.JoinSessionResult{}, err
 	}
-	if err := room.JoinClient(participant, now); err != nil {
+	if err := room.JoinParticipant(participant, now); err != nil {
 		_ = s.media.CloseParticipant(ctx, sessionID, participant.ID)
 		return sessionio.JoinSessionResult{}, toJoinSessionError(err)
-	}
-
-	if err := s.ensureOpenAIParticipant(ctx, &room, sessionID, req.UserID, now); err != nil {
-		return sessionio.JoinSessionResult{}, err
 	}
 
 	if err := s.saveActiveRoomState(ctx, room, req.UserID, now); err != nil {
@@ -242,15 +208,6 @@ func (s *service) JoinSession(ctx context.Context, req sessionio.JoinSessionComm
 		zap.String("audio_mode", participantAudioMode(participant)),
 		zap.Int("participants", room.ParticipantCount()),
 	)
-	for _, joined := range room.Participants() {
-		if joined.Role == vo.ParticipantRoleOpenAIAgent {
-			s.logParticipantEvent("media_participant_ready", room, joined,
-				zap.String("provider_call_id", joined.ProviderCallID),
-			)
-			break
-		}
-	}
-
 	return sessionio.JoinSessionResult{
 		SDPAnswer:     peer.AnswerSDP,
 		RoomID:        string(room.ID),
@@ -277,56 +234,51 @@ func (s *service) findSessionRoom(ctx context.Context, sessionID vo.SessionID) (
 	return record.RuntimeRoom(), nil
 }
 
-func (s *service) acceptClientParticipant(
+func (s *service) acceptParticipant(
 	ctx context.Context,
 	sessionID vo.SessionID,
-	sdp string,
+	req sessionio.JoinSessionCommand,
 	publishAudio bool,
 	now time.Time,
 ) (entity.Participant, *port.Peer, error) {
-	participantID := vo.NewParticipantID()
+	participantID := vo.ParticipantID(req.ParticipantID)
+	if participantID == "" {
+		participantID = vo.NewParticipantID()
+	}
+	role := participantRole(req.ParticipantRole)
 	peer, err := s.media.AcceptOffer(ctx, port.OfferInput{
 		SessionID:     sessionID,
 		ParticipantID: participantID,
-		Role:          vo.ParticipantRoleClient,
-		SDP:           sdp,
+		Role:          role,
+		SDP:           req.SDP,
 		PublishAudio:  publishAudio,
 	})
 	if err != nil {
 		return entity.Participant{}, nil, err
 	}
 
-	return newClientParticipant(participantID, publishAudio, now), peer, nil
+	return newParticipant(participantID, role, publishAudio, now), peer, nil
 }
 
-func newClientParticipant(participantID vo.ParticipantID, publishAudio bool, now time.Time) entity.Participant {
-	participant := entity.NewParticipant(participantID, vo.ParticipantRoleClient, now)
+func participantRole(role string) vo.ParticipantRole {
+	switch vo.ParticipantRole(role) {
+	case vo.ParticipantRoleAgent:
+		return vo.ParticipantRoleAgent
+	case vo.ParticipantRoleMonitor:
+		return vo.ParticipantRoleMonitor
+	default:
+		return vo.ParticipantRoleUser
+	}
+}
+
+func newParticipant(participantID vo.ParticipantID, role vo.ParticipantRole, publishAudio bool, now time.Time) entity.Participant {
+	participant := entity.NewParticipant(participantID, role, now)
 	participant.SetState(vo.ConnectionStateConnecting, now)
 	participant.SetPublishAudio(publishAudio, now)
-	participant.AddTrack(entity.NewTrack(vo.NewTrackID(), vo.TrackKindAudio, now), now)
+	if publishAudio {
+		participant.AddTrack(entity.NewTrack(vo.NewTrackID(), vo.TrackKindAudio, now), now)
+	}
 	return participant
-}
-
-func (s *service) ensureOpenAIParticipant(
-	ctx context.Context,
-	room *entity.Room,
-	sessionID vo.SessionID,
-	userID string,
-	now time.Time,
-) error {
-	if room.HasOpenAIAgent() {
-		return nil
-	}
-
-	openAIParticipant, err := s.connectOpenAIParticipant(ctx, sessionID, now)
-	if err != nil {
-		_ = s.failRoom(ctx, *room, userID, now, "openai_setup_failed")
-		return err
-	}
-	if err := room.AttachOpenAIAgent(openAIParticipant, now); err != nil {
-		return toJoinSessionError(err)
-	}
-	return nil
 }
 
 func toJoinSessionError(err error) error {
@@ -356,38 +308,6 @@ func (s *service) lockSession(sessionID vo.SessionID) func() {
 	return func() {
 		sessionLock.Unlock()
 	}
-}
-
-func (s *service) connectOpenAIParticipant(ctx context.Context, sessionID vo.SessionID, now time.Time) (entity.Participant, error) {
-	participantID := vo.NewParticipantID()
-	offer, err := s.media.CreateOffer(ctx, port.CreateOfferInput{
-		SessionID:           sessionID,
-		ParticipantID:       participantID,
-		Role:                vo.ParticipantRoleOpenAIAgent,
-		DataChannelLabel:    s.realtime.dataChannelLabel,
-		InitialDataMessages: s.realtime.initialEvents,
-	})
-	if err != nil {
-		return entity.Participant{}, err
-	}
-
-	call, err := s.provider.CreateCall(ctx, port.CreateCallInput{
-		SDPOffer: offer.SDPOffer,
-	})
-	if err != nil {
-		return entity.Participant{}, err
-	}
-
-	if _, err := s.media.ApplyAnswer(ctx, offer, call.SDPAnswer); err != nil {
-		_ = s.provider.HangupCall(ctx, call.ProviderCallID)
-		return entity.Participant{}, err
-	}
-
-	participant := entity.NewParticipant(participantID, vo.ParticipantRoleOpenAIAgent, now)
-	participant.SetState(vo.ConnectionStateConnecting, now)
-	participant.SetProviderCallID(call.ProviderCallID, now)
-	participant.AddTrack(entity.NewTrack(vo.NewTrackID(), vo.TrackKindAudio, now), now)
-	return participant, nil
 }
 
 func (s *service) LeaveParticipant(ctx context.Context, req sessionio.LeaveParticipantRequest) (sessionio.LeaveParticipantResponse, error) {

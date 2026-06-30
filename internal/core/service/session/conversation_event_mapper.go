@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
-	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 	"github.com/kyh0703/portfoilo-media/internal/core/port"
 )
 
@@ -20,7 +19,7 @@ func (conversationEventBuilder) Build(
 	}
 
 	eventID := signal.ProviderEventID
-	providerCallID := openAIProviderCallID(room)
+	providerCallID := ""
 	if eventID == "" {
 		eventID = fallbackConversationEventID(room.SessionID, providerCallID, string(signal.Type), signal.Payload)
 	}
@@ -40,13 +39,4 @@ func (conversationEventBuilder) Build(
 		OccurredAt:             occurredAt,
 		Payload:                signal.Payload,
 	}, true
-}
-
-func openAIProviderCallID(room entity.Room) string {
-	for _, participant := range room.Participants() {
-		if participant.Role == vo.ParticipantRoleOpenAIAgent {
-			return participant.ProviderCallID
-		}
-	}
-	return ""
 }

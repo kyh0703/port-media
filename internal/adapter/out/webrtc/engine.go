@@ -169,7 +169,7 @@ func (e *Engine) AcceptOffer(ctx context.Context, input OfferInput) (*Peer, erro
 	if input.SDP == "" {
 		return nil, fmt.Errorf("accept offer: empty SDP")
 	}
-	if input.Role != vo.ParticipantRoleClient {
+	if input.Role != vo.ParticipantRoleUser && input.Role != vo.ParticipantRoleAgent {
 		return nil, fmt.Errorf("accept offer: unsupported role %q", input.Role)
 	}
 
@@ -179,7 +179,7 @@ func (e *Engine) AcceptOffer(ctx context.Context, input OfferInput) (*Peer, erro
 	}
 
 	bridge := e.ensureBridge(input.SessionID)
-	localTrack, err := bridge.ensureOpenAIToClientTrack()
+	localTrack, err := bridge.ensureSubscriberTrack(input.Role)
 	if err != nil {
 		_ = pc.Close()
 		return nil, err
@@ -187,7 +187,7 @@ func (e *Engine) AcceptOffer(ctx context.Context, input OfferInput) (*Peer, erro
 	sender, err := pc.AddTrack(localTrack)
 	if err != nil {
 		_ = pc.Close()
-		return nil, fmt.Errorf("add client outbound audio track: %w", err)
+		return nil, fmt.Errorf("add subscriber audio track: %w", err)
 	}
 	go drainSenderRTCP(sender)
 	if input.PublishAudio {
@@ -248,13 +248,13 @@ func (e *Engine) CreateOffer(ctx context.Context, input CreateOfferInput) (*Peer
 	if err != nil {
 		return nil, fmt.Errorf("create peer connection: %w", err)
 	}
-	if input.Role != vo.ParticipantRoleOpenAIAgent {
+	if input.Role != vo.ParticipantRoleAgent {
 		_ = pc.Close()
 		return nil, fmt.Errorf("create offer: unsupported role %q", input.Role)
 	}
 
 	bridge := e.ensureBridge(input.SessionID)
-	localTrack, err := bridge.ensureClientToOpenAITrack()
+	localTrack, err := bridge.ensureUserToAgentTrack()
 	if err != nil {
 		_ = pc.Close()
 		return nil, err
@@ -262,7 +262,7 @@ func (e *Engine) CreateOffer(ctx context.Context, input CreateOfferInput) (*Peer
 	sender, err := pc.AddTrack(localTrack)
 	if err != nil {
 		_ = pc.Close()
-		return nil, fmt.Errorf("add openai outbound audio track: %w", err)
+		return nil, fmt.Errorf("add agent outbound audio track: %w", err)
 	}
 	go drainSenderRTCP(sender)
 	pc.OnTrack(e.forwardRemoteTrack(MediaTrackStateChange{

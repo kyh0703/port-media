@@ -6,9 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
+	"github.com/gorilla/websocket"
 	httpdto "github.com/kyh0703/portfoilo-media/internal/adapter/in/http/dto"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
 	coreport "github.com/kyh0703/portfoilo-media/internal/core/port"
@@ -191,9 +191,11 @@ func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
 	usecase := &fakeSessionUsecases{}
 	handler := newFakeSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: coreport.MediaToken{
-			SessionID:      "session-1",
-			ConversationID: "conversation-1",
-			UserID:         "user-1",
+			SessionID:       "session-1",
+			ConversationID:  "conversation-1",
+			ParticipantID:   "participant-1",
+			ParticipantRole: "user",
+			UserID:          "user-1",
 		},
 	})
 
@@ -202,38 +204,31 @@ func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
 		app.Add(route.Method, route.Path, route.Handler)
 	}
 
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/sessions/session-1/join",
-		strings.NewReader("offer-sdp"),
-	)
-	req.Header.Set("Authorization", "Bearer media-token")
-	req.Header.Set("Content-Type", "application/sdp")
-
-	res, err := app.Test(req)
+	server := httptest.NewServer(app.mux)
+	defer server.Close()
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL(server.URL, "/sessions/session-1/join"), nil)
 	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
+		t.Fatalf("Dial() error = %v", err)
 	}
 	defer func() {
-		_ = res.Body.Close()
+		_ = conn.Close()
 	}()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatalf("ReadAll() error = %v", err)
+	if err := conn.WriteJSON(map[string]string{
+		"type":             "offer",
+		"participantToken": "media-token",
+		"offerSdp":         "offer-sdp",
+	}); err != nil {
+		t.Fatalf("WriteJSON() error = %v", err)
 	}
-
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d body=%s", res.StatusCode, http.StatusOK, string(body))
+	var answer struct {
+		Type string `json:"type"`
+		SDP  string `json:"sdp"`
 	}
-	if string(body) != "answer-sdp" {
-		t.Fatalf("body = %q, want answer-sdp", string(body))
+	if err := conn.ReadJSON(&answer); err != nil {
+		t.Fatalf("ReadJSON() error = %v", err)
 	}
-	if res.Header.Get("X-Room-Id") != "room-1" {
-		t.Fatalf("X-Room-Id = %q, want room-1", res.Header.Get("X-Room-Id"))
-	}
-	if res.Header.Get("X-Participant-Id") != "participant-1" {
-		t.Fatalf("X-Participant-Id = %q, want participant-1", res.Header.Get("X-Participant-Id"))
+	if answer.Type != "answer" || answer.SDP != "answer-sdp" {
+		t.Fatalf("answer = %#v, want answer-sdp", answer)
 	}
 	if usecase.offerReq.SessionID != "session-1" {
 		t.Fatalf("SessionID = %q, want session-1", usecase.offerReq.SessionID)
@@ -243,6 +238,12 @@ func TestSessionsHandlerJoinsWithSDP(t *testing.T) {
 	}
 	if usecase.offerReq.UserID != "user-1" {
 		t.Fatalf("UserID = %q, want user-1", usecase.offerReq.UserID)
+	}
+	if usecase.offerReq.ParticipantID != "participant-1" {
+		t.Fatalf("ParticipantID = %q, want participant-1", usecase.offerReq.ParticipantID)
+	}
+	if usecase.offerReq.ParticipantRole != "user" {
+		t.Fatalf("ParticipantRole = %q, want user", usecase.offerReq.ParticipantRole)
 	}
 	if usecase.offerReq.SDP != "offer-sdp" {
 		t.Fatalf("SDP = %q, want offer-sdp", usecase.offerReq.SDP)
@@ -256,9 +257,11 @@ func TestSessionsHandlerAcceptsListenerJoinMode(t *testing.T) {
 	usecase := &fakeSessionUsecases{}
 	handler := newFakeSessionsHandler(usecase, fakeMediaTokenVerifier{
 		token: coreport.MediaToken{
-			SessionID:      "session-1",
-			ConversationID: "conversation-1",
-			UserID:         "user-1",
+			SessionID:       "session-1",
+			ConversationID:  "conversation-1",
+			ParticipantID:   "participant-1",
+			ParticipantRole: "user",
+			UserID:          "user-1",
 		},
 	})
 
@@ -267,25 +270,25 @@ func TestSessionsHandlerAcceptsListenerJoinMode(t *testing.T) {
 		app.Add(route.Method, route.Path, route.Handler)
 	}
 
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/sessions/session-1/join?mode=listener",
-		strings.NewReader("offer-sdp"),
-	)
-	req.Header.Set("Authorization", "Bearer media-token")
-	req.Header.Set("Content-Type", "application/sdp")
-
-	res, err := app.Test(req)
+	server := httptest.NewServer(app.mux)
+	defer server.Close()
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL(server.URL, "/sessions/session-1/join?mode=listener"), nil)
 	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
+		t.Fatalf("Dial() error = %v", err)
 	}
 	defer func() {
-		_ = res.Body.Close()
+		_ = conn.Close()
 	}()
-
-	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(res.Body)
-		t.Fatalf("status = %d, want %d body=%s", res.StatusCode, http.StatusOK, string(body))
+	if err := conn.WriteJSON(map[string]string{
+		"type":             "offer",
+		"participantToken": "media-token",
+		"offerSdp":         "offer-sdp",
+	}); err != nil {
+		t.Fatalf("WriteJSON() error = %v", err)
+	}
+	var answer map[string]string
+	if err := conn.ReadJSON(&answer); err != nil {
+		t.Fatalf("ReadJSON() error = %v", err)
 	}
 	if usecase.offerReq.AudioMode != sessionio.AudioModeListener {
 		t.Fatalf("AudioMode = %q, want %q", usecase.offerReq.AudioMode, sessionio.AudioModeListener)
@@ -362,41 +365,31 @@ func TestSessionsHandlerRejectsJoinWithoutMediaToken(t *testing.T) {
 		app.Add(route.Method, route.Path, route.Handler)
 	}
 
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/sessions/session-1/join",
-		strings.NewReader("offer-sdp"),
-	)
-	req.Header.Set("Content-Type", "application/sdp")
-
-	res, err := app.Test(req)
+	server := httptest.NewServer(app.mux)
+	defer server.Close()
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL(server.URL, "/sessions/session-1/join"), nil)
 	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
+		t.Fatalf("Dial() error = %v", err)
 	}
 	defer func() {
-		_ = res.Body.Close()
+		_ = conn.Close()
 	}()
-
-	if res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusUnauthorized)
+	if err := conn.WriteJSON(map[string]string{
+		"type":             "offer",
+		"participantToken": "missing-token",
+		"offerSdp":         "offer-sdp",
+	}); err != nil {
+		t.Fatalf("WriteJSON() error = %v", err)
 	}
 	var body struct {
-		StatusCode int    `json:"statusCode"`
-		Message    string `json:"message"`
-		Error      string `json:"error"`
-		Data       any    `json:"data"`
+		Type    string `json:"type"`
+		Message string `json:"message"`
 	}
-	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
-		t.Fatalf("Decode() error = %v", err)
+	if err := conn.ReadJSON(&body); err != nil {
+		t.Fatalf("ReadJSON() error = %v", err)
 	}
-	if body.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("statusCode = %d, want %d", body.StatusCode, http.StatusUnauthorized)
-	}
-	if body.Message != "invalid media token" {
-		t.Fatalf("message = %q, want invalid media token", body.Message)
-	}
-	if body.Error != exception.CodeUnauthorized {
-		t.Fatalf("error = %q, want %q", body.Error, exception.CodeUnauthorized)
+	if body.Type != "error" || body.Message != "invalid participant token" {
+		t.Fatalf("body = %#v, want invalid participant token error", body)
 	}
 }
 
@@ -415,24 +408,31 @@ func TestSessionsHandlerRejectsSessionMismatch(t *testing.T) {
 		app.Add(route.Method, route.Path, route.Handler)
 	}
 
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/sessions/session-1/join",
-		strings.NewReader("offer-sdp"),
-	)
-	req.Header.Set("Authorization", "Bearer media-token")
-	req.Header.Set("Content-Type", "application/sdp")
-
-	res, err := app.Test(req)
+	server := httptest.NewServer(app.mux)
+	defer server.Close()
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL(server.URL, "/sessions/session-1/join"), nil)
 	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
+		t.Fatalf("Dial() error = %v", err)
 	}
 	defer func() {
-		_ = res.Body.Close()
+		_ = conn.Close()
 	}()
-
-	if res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusUnauthorized)
+	if err := conn.WriteJSON(map[string]string{
+		"type":             "offer",
+		"participantToken": "media-token",
+		"offerSdp":         "offer-sdp",
+	}); err != nil {
+		t.Fatalf("WriteJSON() error = %v", err)
+	}
+	var body struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	}
+	if err := conn.ReadJSON(&body); err != nil {
+		t.Fatalf("ReadJSON() error = %v", err)
+	}
+	if body.Type != "error" || body.Message != "session token mismatch" {
+		t.Fatalf("body = %#v, want session token mismatch error", body)
 	}
 }
 
@@ -452,4 +452,8 @@ func (a *testApp) Test(req *http.Request, _ ...int) (*http.Response, error) {
 	rec := httptest.NewRecorder()
 	a.mux.ServeHTTP(rec, req)
 	return rec.Result(), nil
+}
+
+func wsURL(serverURL string, path string) string {
+	return "ws" + serverURL[len("http"):] + path
 }

@@ -2,10 +2,10 @@ package handler
 
 import (
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 
+	"github.com/gorilla/websocket"
 	httpdto "github.com/kyh0703/portfoilo-media/internal/adapter/in/http/dto"
 	httpmapper "github.com/kyh0703/portfoilo-media/internal/adapter/in/http/mapper"
 	coreport "github.com/kyh0703/portfoilo-media/internal/core/port"
@@ -16,6 +16,28 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/pkg/response"
 	"go.uber.org/fx"
 )
+
+var signalingUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+type mediaOfferMessage struct {
+	Type             string `json:"type"`
+	ParticipantToken string `json:"participantToken"`
+	OfferSDP         string `json:"offerSdp"`
+}
+
+type mediaAnswerMessage struct {
+	Type string `json:"type"`
+	SDP  string `json:"sdp"`
+}
+
+type mediaErrorMessage struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
 
 type SessionsHandler struct {
 	createSession usecase.CreateSessionUsecase
@@ -52,7 +74,7 @@ func (h *SessionsHandler) Table() []Mapper {
 	return []Mapper{
 		{Method: http.MethodPost, Path: "/sessions", Handler: h.Create},
 		{Method: http.MethodGet, Path: "/sessions/{sessionId}/status", Handler: h.GetStatus},
-		{Method: http.MethodPost, Path: "/sessions/{sessionId}/join", Handler: h.Join},
+		{Method: http.MethodGet, Path: "/sessions/{sessionId}/join", Handler: h.Join},
 		{Method: http.MethodPost, Path: "/sessions/{sessionId}/participants/{participantId}/leave", Handler: h.LeaveParticipant},
 		{Method: http.MethodPost, Path: "/sessions/{sessionId}/end", Handler: h.End},
 	}
@@ -98,43 +120,59 @@ func (h *SessionsHandler) GetStatus(w http.ResponseWriter, r *http.Request) erro
 }
 
 func (h *SessionsHandler) Join(w http.ResponseWriter, r *http.Request) error {
-	claims, err := h.verifySessionToken(r)
+	conn, err := signalingUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return err
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	var offer mediaOfferMessage
+	if err := conn.ReadJSON(&offer); err != nil {
+		return h.writeSignalingError(conn, "invalid signaling offer")
+	}
+	if offer.Type != "offer" || strings.TrimSpace(offer.OfferSDP) == "" {
+		return h.writeSignalingError(conn, "invalid signaling offer")
 	}
 
-	body, err := io.ReadAll(r.Body)
+	claims, err := h.tokenVerifier.Verify(r.Context(), offer.ParticipantToken)
 	if err != nil {
-		return err
+		return h.writeSignalingError(conn, "invalid participant token")
 	}
-	sdp := string(body)
-	if sdp == "" {
-		return exception.New(exception.CodeBadRequest, "empty join SDP", http.StatusBadRequest)
+	if claims.SessionID != r.PathValue("sessionId") {
+		return h.writeSignalingError(conn, "session token mismatch")
 	}
+
 	audioMode, err := parseAudioMode(r.URL.Query().Get("mode"))
 	if err != nil {
-		return exception.New(exception.CodeBadRequest, "invalid join mode", http.StatusBadRequest)
+		return h.writeSignalingError(conn, "invalid join mode")
 	}
 
 	res, err := h.joinSession.JoinSession(r.Context(), sessionio.JoinSessionCommand{
-		SessionID:      claims.SessionID,
-		ConversationID: claims.ConversationID,
-		UserID:         claims.UserID,
-		SDP:            sdp,
-		AudioMode:      audioMode,
+		SessionID:       claims.SessionID,
+		ConversationID:  claims.ConversationID,
+		ParticipantID:   claims.ParticipantID,
+		ParticipantRole: claims.ParticipantRole,
+		UserID:          claims.UserID,
+		SDP:             offer.OfferSDP,
+		AudioMode:       audioMode,
 	})
 	if err != nil {
 		if errors.Is(err, usecase.ErrSessionNotJoinable) {
-			return exception.New(exception.CodeConflict, "media session is not joinable", http.StatusConflict)
+			return h.writeSignalingError(conn, "media session is not joinable")
 		}
-		return err
+		return h.writeSignalingError(conn, "media join failed")
 	}
 
-	w.Header().Set("Content-Type", "application/sdp")
-	w.Header().Set("X-Room-Id", res.RoomID)
-	w.Header().Set("X-Participant-Id", res.ParticipantID)
-	_, err = io.WriteString(w, res.SDPAnswer)
-	return err
+	return conn.WriteJSON(mediaAnswerMessage{
+		Type: "answer",
+		SDP:  res.SDPAnswer,
+	})
+}
+
+func (h *SessionsHandler) writeSignalingError(conn *websocket.Conn, message string) error {
+	return conn.WriteJSON(mediaErrorMessage{Type: "error", Message: message})
 }
 
 func (h *SessionsHandler) LeaveParticipant(w http.ResponseWriter, r *http.Request) error {

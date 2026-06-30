@@ -42,7 +42,6 @@ func ToGetSessionStatusResponse(result sessionio.GetSessionStatusResult) httpdto
 		Status:                result.Status,
 		ConnectionState:       result.ConnectionState,
 		MediaState:            result.MediaState,
-		OpenAIProviderCallID:  result.OpenAIProviderCallID,
 		Participants:          result.Participants,
 		ParticipantStates:     toParticipantStateResponses(result.ParticipantStates),
 		LastRealtimeEventType: result.LastRealtimeEventType,

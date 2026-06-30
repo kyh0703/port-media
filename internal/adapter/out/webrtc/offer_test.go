@@ -9,7 +9,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
 )
 
-func TestEngineCreatesOpenAIAgentOffer(t *testing.T) {
+func TestEngineCreatesAgentOffer(t *testing.T) {
 	engine, err := NewEngine(&configs.Config{})
 	if err != nil {
 		t.Fatalf("NewEngine() error = %v", err)
@@ -17,8 +17,8 @@ func TestEngineCreatesOpenAIAgentOffer(t *testing.T) {
 
 	offer, err := engine.CreateOffer(context.Background(), CreateOfferInput{
 		SessionID:     vo.SessionID("session-1"),
-		ParticipantID: vo.ParticipantID("openai-1"),
-		Role:          vo.ParticipantRoleOpenAIAgent,
+		ParticipantID: vo.ParticipantID("agent-1"),
+		Role:          vo.ParticipantRoleAgent,
 	})
 	if err != nil {
 		t.Fatalf("CreateOffer() error = %v", err)
@@ -30,12 +30,12 @@ func TestEngineCreatesOpenAIAgentOffer(t *testing.T) {
 	if offer.SDPOffer == "" {
 		t.Fatal("CreateOffer() returned empty SDP offer")
 	}
-	if offer.Role != vo.ParticipantRoleOpenAIAgent {
-		t.Fatalf("Role = %q, want %q", offer.Role, vo.ParticipantRoleOpenAIAgent)
+	if offer.Role != vo.ParticipantRoleAgent {
+		t.Fatalf("Role = %q, want %q", offer.Role, vo.ParticipantRoleAgent)
 	}
 }
 
-func TestEngineCreatesOpenAIDataChannelOffer(t *testing.T) {
+func TestEngineCreatesAgentDataChannelOffer(t *testing.T) {
 	engine, err := NewEngine(&configs.Config{})
 	if err != nil {
 		t.Fatalf("NewEngine() error = %v", err)
@@ -43,8 +43,8 @@ func TestEngineCreatesOpenAIDataChannelOffer(t *testing.T) {
 
 	offer, err := engine.CreateOffer(context.Background(), CreateOfferInput{
 		SessionID:        vo.SessionID("session-1"),
-		ParticipantID:    vo.ParticipantID("openai-1"),
-		Role:             vo.ParticipantRoleOpenAIAgent,
+		ParticipantID:    vo.ParticipantID("agent-1"),
+		Role:             vo.ParticipantRoleAgent,
 		DataChannelLabel: "oai-events",
 	})
 	if err != nil {

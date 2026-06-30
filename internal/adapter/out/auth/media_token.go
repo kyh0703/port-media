@@ -31,7 +31,8 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (port.MediaToken, err
 	if err != nil {
 		return port.MediaToken{}, fmt.Errorf("%w: %v", port.ErrInvalidMediaToken, err)
 	}
-	if claims.SessionID == "" || claims.ConversationID == "" || claims.UserID == "" {
+	if claims.SessionID == "" || claims.ConversationID == "" ||
+		claims.ParticipantID == "" || claims.ParticipantRole == "" {
 		return port.MediaToken{}, fmt.Errorf("%w: missing required token fields", port.ErrInvalidMediaToken)
 	}
 
@@ -55,10 +56,10 @@ func (s *RedisMediaTokenStore) Get(ctx context.Context, token string) (port.Medi
 		return port.MediaToken{}, err
 	}
 
-	var mediaToken port.MediaToken
-	if err := json.Unmarshal([]byte(payload), &mediaToken); err != nil {
+	var participantToken port.MediaToken
+	if err := json.Unmarshal([]byte(payload), &participantToken); err != nil {
 		return port.MediaToken{}, fmt.Errorf("decode media token: %w", err)
 	}
 
-	return mediaToken, nil
+	return participantToken, nil
 }

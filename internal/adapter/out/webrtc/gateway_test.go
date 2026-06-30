@@ -18,7 +18,7 @@ func TestGatewayRuntimeEventsUseConfiguredContext(t *testing.T) {
 	gateway.handleConnectionStateChange()(ConnectionStateChange{
 		SessionID:     vo.SessionID("session-1"),
 		ParticipantID: vo.ParticipantID("participant-1"),
-		Role:          vo.ParticipantRoleClient,
+		Role:          vo.ParticipantRoleUser,
 		State:         vo.ConnectionStateClosed,
 	})
 
