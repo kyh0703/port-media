@@ -7,23 +7,23 @@ import (
 )
 
 type MediaSessionState struct {
-	SessionID             vo.SessionID
-	ConversationID        vo.ConversationID
-	UserID                string
-	RoomID                vo.RoomID
-	Status                vo.RoomStatus
-	ConnectionState       vo.ConnectionState
-	MediaState            vo.TrackState
-	Participants          int
-	ParticipantStates     []MediaSessionParticipantState
-	LastRealtimeEventType string
-	LastRealtimeEventAt   time.Time
-	RecentRealtimeEvents  []RealtimeEvent
-	StartedAt             time.Time
-	UpdatedAt             time.Time
+	SessionID            vo.SessionID
+	ConversationID       vo.ConversationID
+	UserID               string
+	RoomID               vo.RoomID
+	Status               vo.RoomStatus
+	ConnectionState      vo.ConnectionState
+	MediaState           vo.TrackState
+	Participants         int
+	ParticipantStates    []MediaSessionParticipantState
+	LastRuntimeEventType string
+	LastRuntimeEventAt   time.Time
+	RecentRuntimeEvents  []RuntimeEvent
+	StartedAt            time.Time
+	UpdatedAt            time.Time
 }
 
-type RealtimeEvent struct {
+type RuntimeEvent struct {
 	Type string
 	At   time.Time
 }

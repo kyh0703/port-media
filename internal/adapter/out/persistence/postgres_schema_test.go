@@ -38,6 +38,10 @@ func TestEnsureSchemaCreatesRoomsTableAndIndex(t *testing.T) {
 
 	mock.ExpectExec(`CREATE TABLE IF NOT EXISTS "rooms"`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`ALTER TABLE "rooms" ADD COLUMN IF NOT EXISTS "last_runtime_event_type" text`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`ALTER TABLE "rooms" ADD COLUMN IF NOT EXISTS "last_runtime_event_at" timestamptz`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`CREATE INDEX IF NOT EXISTS "idx_rooms_session_id" ON "rooms" \("session_id"\)`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 

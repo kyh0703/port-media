@@ -13,9 +13,8 @@ var Module = fx.Module(
 	"app",
 	fx.Provide(
 		NewSessionServiceOptions,
-		sessionservice.NewNoopProviderEventNormalizer,
 		fx.Annotate(
-			sessionservice.NewServiceWithOptionsLoggerAndPublisher,
+			sessionservice.NewServiceWithOptionsAndLogger,
 			fx.As(new(sessionservice.Service)),
 			fx.As(new(usecase.CreateSessionUsecase)),
 			fx.As(new(usecase.JoinSessionUsecase)),

@@ -10,6 +10,6 @@ func NewSessionServiceOptions(cfg *configs.Config) sessionservice.ServiceOptions
 		return sessionservice.ServiceOptions{}
 	}
 	return sessionservice.ServiceOptions{
-		RealtimeEventHistoryLimit: cfg.Realtime.RealtimeEventHistoryLimit,
+		RuntimeEventHistoryLimit: cfg.Realtime.RuntimeEventHistoryLimit,
 	}
 }

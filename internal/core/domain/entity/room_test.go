@@ -37,19 +37,26 @@ func TestRoomRejectsJoinWhenClosed(t *testing.T) {
 	}
 }
 
-func TestRoomAllowsUserAndAgentParticipants(t *testing.T) {
+func TestRoomAllowsMediaParticipantRoles(t *testing.T) {
 	now := time.Date(2026, 6, 5, 10, 0, 0, 0, time.UTC)
 	room := NewRoom(vo.RoomID("room-1"), vo.SessionID("session-1"), vo.ConversationID("conversation-1"), now)
-	user := NewParticipant(vo.ParticipantID("user-1"), vo.ParticipantRoleUser, now)
-	agent := NewParticipant(vo.ParticipantID("agent-1"), vo.ParticipantRoleAgent, now)
-	if err := room.JoinParticipant(user, now); err != nil {
-		t.Fatalf("JoinParticipant(user) error = %v", err)
+
+	roles := []vo.ParticipantRole{
+		vo.ParticipantRoleUser,
+		vo.ParticipantRoleAgent,
+		vo.ParticipantRoleRecorder,
+		vo.ParticipantRoleSIP,
+		vo.ParticipantRoleMonitor,
+		vo.ParticipantRoleService,
 	}
-	if err := room.JoinParticipant(agent, now); err != nil {
-		t.Fatalf("JoinParticipant(agent) error = %v", err)
+	for _, role := range roles {
+		participant := NewParticipant(vo.ParticipantID(string(role)+"-1"), role, now)
+		if err := room.JoinParticipant(participant, now); err != nil {
+			t.Fatalf("JoinParticipant(%s) error = %v", role, err)
+		}
 	}
-	if room.ParticipantCount() != 2 {
-		t.Fatalf("ParticipantCount() = %d, want 2", room.ParticipantCount())
+	if room.ParticipantCount() != len(roles) {
+		t.Fatalf("ParticipantCount() = %d, want %d", room.ParticipantCount(), len(roles))
 	}
 }
 

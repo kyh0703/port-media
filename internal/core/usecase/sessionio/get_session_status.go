@@ -7,18 +7,18 @@ type GetSessionStatusRequest struct {
 }
 
 type GetSessionStatusResult struct {
-	SessionID             string
-	ConversationID        string
-	UserID                string
-	RoomID                string
-	Status                string
-	ConnectionState       string
-	MediaState            string
-	Participants          int
-	ParticipantStates     []ParticipantStateResult
-	LastRealtimeEventType string
-	LastRealtimeEventAt   time.Time
-	RecentRealtimeEvents  []RealtimeEventResult
-	StartedAt             time.Time
-	LastActiveAt          time.Time
+	SessionID            string
+	ConversationID       string
+	UserID               string
+	RoomID               string
+	Status               string
+	ConnectionState      string
+	MediaState           string
+	Participants         int
+	ParticipantStates    []ParticipantStateResult
+	LastRuntimeEventType string
+	LastRuntimeEventAt   time.Time
+	RecentRuntimeEvents  []RuntimeEventResult
+	StartedAt            time.Time
+	LastActiveAt         time.Time
 }

@@ -73,7 +73,7 @@ func (s *service) failRoom(ctx context.Context, room entity.Room, userID string,
 		)
 	}
 	recordErr := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room))
-	stateErr := s.states.Save(ctx, s.project.Project(room, userID, now))
+	stateErr := s.states.Save(ctx, s.projectedState(ctx, room, userID, now))
 	if recordErr != nil || stateErr != nil {
 		s.logRoomErrorEvent("media_room_failure_state_save_failed", room,
 			zap.String("failure_reason", reason),
@@ -100,7 +100,7 @@ func (s *service) closeRoom(ctx context.Context, room entity.Room, userID string
 	room.Close(now)
 	deleteErr := s.runtime.Delete(ctx, room.ID)
 	recordErr := s.records.Save(ctx, entity.NewMediaSessionRecordFromRoom(room))
-	stateErr := s.states.Save(ctx, s.project.Project(room, userID, now))
+	stateErr := s.states.Save(ctx, s.projectedState(ctx, room, userID, now))
 	persistErr := errors.Join(deleteErr, recordErr, stateErr)
 	if persistErr != nil {
 		s.logRoomErrorEvent("media_room_close_state_save_failed", room,

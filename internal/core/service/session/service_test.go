@@ -11,7 +11,7 @@ import (
 	sessionio "github.com/kyh0703/portfoilo-media/internal/core/usecase/sessionio"
 )
 
-func TestServiceJoinsTokenParticipantWithoutCreatingProviderCall(t *testing.T) {
+func TestServiceJoinsGatewayManagedParticipantFromToken(t *testing.T) {
 	records := newTestRecordRepository()
 	runtime := newTestRoomRuntimeRepository()
 	states := &testStateRepository{}
@@ -50,6 +50,84 @@ func TestServiceJoinsTokenParticipantWithoutCreatingProviderCall(t *testing.T) {
 	}
 	if media.createOfferCalls != 0 {
 		t.Fatalf("CreateOffer calls = %d, want 0", media.createOfferCalls)
+	}
+}
+
+func TestServiceRecordsDataChannelMessageAsMediaRuntimeEvent(t *testing.T) {
+	records := newTestRecordRepository()
+	runtime := newTestRoomRuntimeRepository()
+	states := &testStateRepository{}
+	media := &testMediaGateway{}
+	svc := NewService(records, runtime, states, media)
+
+	created, err := svc.CreateSession(context.Background(), sessionio.CreateSessionRequest{
+		SessionID:      "session-1",
+		ConversationID: "conversation-1",
+	})
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+
+	_, err = svc.JoinSession(context.Background(), sessionio.JoinSessionCommand{
+		SessionID:       created.SessionID,
+		ConversationID:  "conversation-1",
+		ParticipantID:   "agent-1",
+		ParticipantRole: "agent",
+		UserID:          "user-1",
+		SDP:             "offer-sdp",
+		AudioMode:       sessionio.AudioModePublisher,
+	})
+	if err != nil {
+		t.Fatalf("JoinSession() error = %v", err)
+	}
+
+	handler, ok := svc.(port.MediaRuntimeEventHandler)
+	if !ok {
+		t.Fatal("service does not implement MediaRuntimeEventHandler")
+	}
+	handler.HandleDataChannelMessage(context.Background(), port.DataChannelMessage{
+		SessionID:     vo.SessionID(created.SessionID),
+		ParticipantID: vo.ParticipantID("agent-1"),
+		Role:          vo.ParticipantRoleAgent,
+		Label:         "events",
+		Payload:       `{"type":"response.done"}`,
+	})
+
+	if states.state.LastRuntimeEventType != runtimeEventTypeDataChannelMessage {
+		t.Fatalf("LastRuntimeEventType = %q, want %q", states.state.LastRuntimeEventType, runtimeEventTypeDataChannelMessage)
+	}
+	if len(states.state.RecentRuntimeEvents) != 1 {
+		t.Fatalf("RecentRuntimeEvents len = %d, want 1", len(states.state.RecentRuntimeEvents))
+	}
+	if states.state.RecentRuntimeEvents[0].Type != runtimeEventTypeDataChannelMessage {
+		t.Fatalf("RecentRuntimeEvents[0].Type = %q, want %q", states.state.RecentRuntimeEvents[0].Type, runtimeEventTypeDataChannelMessage)
+	}
+	record, found, err := records.FindBySessionID(context.Background(), vo.SessionID(created.SessionID))
+	if err != nil {
+		t.Fatalf("FindBySessionID() error = %v", err)
+	}
+	if !found {
+		t.Fatal("record not found")
+	}
+	if record.LastRuntimeEventType != runtimeEventTypeDataChannelMessage {
+		t.Fatalf("record.LastRuntimeEventType = %q, want %q", record.LastRuntimeEventType, runtimeEventTypeDataChannelMessage)
+	}
+
+	handler.HandleConnectionStateChange(context.Background(), port.ConnectionStateChange{
+		SessionID:     vo.SessionID(created.SessionID),
+		ParticipantID: vo.ParticipantID("agent-1"),
+		Role:          vo.ParticipantRoleAgent,
+		State:         vo.ConnectionStateConnected,
+	})
+
+	if states.state.LastRuntimeEventType != runtimeEventTypeDataChannelMessage {
+		t.Fatalf("LastRuntimeEventType after connection change = %q, want %q", states.state.LastRuntimeEventType, runtimeEventTypeDataChannelMessage)
+	}
+	if len(states.state.RecentRuntimeEvents) != 1 {
+		t.Fatalf("RecentRuntimeEvents len after connection change = %d, want 1", len(states.state.RecentRuntimeEvents))
+	}
+	if states.state.RecentRuntimeEvents[0].Type != runtimeEventTypeDataChannelMessage {
+		t.Fatalf("RecentRuntimeEvents[0].Type after connection change = %q, want %q", states.state.RecentRuntimeEvents[0].Type, runtimeEventTypeDataChannelMessage)
 	}
 }
 

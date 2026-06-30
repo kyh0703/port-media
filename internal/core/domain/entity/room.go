@@ -14,16 +14,16 @@ var (
 )
 
 type Room struct {
-	ID                    vo.RoomID
-	SessionID             vo.SessionID
-	ConversationID        vo.ConversationID
-	UserID                string
-	Status                vo.RoomStatus
-	participants          map[vo.ParticipantID]Participant
-	LastRealtimeEventType string
-	LastRealtimeEventAt   time.Time
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	ID                   vo.RoomID
+	SessionID            vo.SessionID
+	ConversationID       vo.ConversationID
+	UserID               string
+	Status               vo.RoomStatus
+	participants         map[vo.ParticipantID]Participant
+	LastRuntimeEventType string
+	LastRuntimeEventAt   time.Time
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 func NewRoom(id vo.RoomID, sessionID vo.SessionID, conversationID vo.ConversationID, now time.Time) Room {
@@ -49,7 +49,7 @@ func (r Room) CanJoinParticipants() bool {
 
 func (r *Room) JoinParticipant(participant Participant, now time.Time) error {
 	switch participant.Role {
-	case vo.ParticipantRoleUser, vo.ParticipantRoleAgent, vo.ParticipantRoleMonitor:
+	case vo.ParticipantRoleUser, vo.ParticipantRoleAgent, vo.ParticipantRoleRecorder, vo.ParticipantRoleSIP, vo.ParticipantRoleMonitor, vo.ParticipantRoleService:
 	default:
 		return ErrParticipantRoleMismatch
 	}
@@ -114,9 +114,9 @@ func (r *Room) Touch(now time.Time) {
 	r.UpdatedAt = now
 }
 
-func (r *Room) RecordRealtimeEvent(eventType string, now time.Time) {
-	r.LastRealtimeEventType = eventType
-	r.LastRealtimeEventAt = now
+func (r *Room) RecordRuntimeEvent(eventType string, now time.Time) {
+	r.LastRuntimeEventType = eventType
+	r.LastRuntimeEventAt = now
 	r.UpdatedAt = now
 }
 

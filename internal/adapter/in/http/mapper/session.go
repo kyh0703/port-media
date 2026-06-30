@@ -35,20 +35,20 @@ func ToEndSessionResponse(result sessionio.EndSessionResponse) httpdto.EndSessio
 
 func ToGetSessionStatusResponse(result sessionio.GetSessionStatusResult) httpdto.GetSessionStatusResponse {
 	return httpdto.GetSessionStatusResponse{
-		SessionID:             result.SessionID,
-		ConversationID:        result.ConversationID,
-		UserID:                result.UserID,
-		RoomID:                result.RoomID,
-		Status:                result.Status,
-		ConnectionState:       result.ConnectionState,
-		MediaState:            result.MediaState,
-		Participants:          result.Participants,
-		ParticipantStates:     toParticipantStateResponses(result.ParticipantStates),
-		LastRealtimeEventType: result.LastRealtimeEventType,
-		LastRealtimeEventAt:   formatOptionalTime(result.LastRealtimeEventAt),
-		RecentRealtimeEvents:  toRealtimeEventResponses(result.RecentRealtimeEvents),
-		StartedAt:             formatOptionalTime(result.StartedAt),
-		LastActiveAt:          formatOptionalTime(result.LastActiveAt),
+		SessionID:            result.SessionID,
+		ConversationID:       result.ConversationID,
+		UserID:               result.UserID,
+		RoomID:               result.RoomID,
+		Status:               result.Status,
+		ConnectionState:      result.ConnectionState,
+		MediaState:           result.MediaState,
+		Participants:         result.Participants,
+		ParticipantStates:    toParticipantStateResponses(result.ParticipantStates),
+		LastRuntimeEventType: result.LastRuntimeEventType,
+		LastRuntimeEventAt:   formatOptionalTime(result.LastRuntimeEventAt),
+		RecentRuntimeEvents:  toRuntimeEventResponses(result.RecentRuntimeEvents),
+		StartedAt:            formatOptionalTime(result.StartedAt),
+		LastActiveAt:         formatOptionalTime(result.LastActiveAt),
 	}
 }
 
@@ -66,10 +66,10 @@ func toParticipantStateResponses(states []sessionio.ParticipantStateResult) []ht
 	return responses
 }
 
-func toRealtimeEventResponses(events []sessionio.RealtimeEventResult) []httpdto.RealtimeEventResponse {
-	responses := make([]httpdto.RealtimeEventResponse, 0, len(events))
+func toRuntimeEventResponses(events []sessionio.RuntimeEventResult) []httpdto.RuntimeEventResponse {
+	responses := make([]httpdto.RuntimeEventResponse, 0, len(events))
 	for _, event := range events {
-		responses = append(responses, httpdto.RealtimeEventResponse{
+		responses = append(responses, httpdto.RuntimeEventResponse{
 			Type: event.Type,
 			At:   formatOptionalTime(event.At),
 		})

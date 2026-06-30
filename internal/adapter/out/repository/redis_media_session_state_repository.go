@@ -29,20 +29,20 @@ func NewRedisMediaSessionStateRepository(client *redis.Client, cfg *configs.Conf
 
 func (r *RedisMediaSessionStateRepository) Save(ctx context.Context, state sessionquery.MediaSessionState) error {
 	body, err := json.Marshal(mediaSessionStatePayload{
-		SessionID:             string(state.SessionID),
-		ConversationID:        string(state.ConversationID),
-		UserID:                state.UserID,
-		RoomID:                string(state.RoomID),
-		Status:                string(state.Status),
-		ConnectionState:       string(state.ConnectionState),
-		MediaState:            string(state.MediaState),
-		Participants:          state.Participants,
-		ParticipantStates:     toMediaSessionParticipantPayloads(state.ParticipantStates),
-		LastRealtimeEventType: state.LastRealtimeEventType,
-		LastRealtimeEventAt:   state.LastRealtimeEventAt,
-		RecentRealtimeEvents:  toRealtimeEventPayloads(state.RecentRealtimeEvents),
-		StartedAt:             state.StartedAt,
-		LastActiveAt:          state.UpdatedAt,
+		SessionID:            string(state.SessionID),
+		ConversationID:       string(state.ConversationID),
+		UserID:               state.UserID,
+		RoomID:               string(state.RoomID),
+		Status:               string(state.Status),
+		ConnectionState:      string(state.ConnectionState),
+		MediaState:           string(state.MediaState),
+		Participants:         state.Participants,
+		ParticipantStates:    toMediaSessionParticipantPayloads(state.ParticipantStates),
+		LastRuntimeEventType: state.LastRuntimeEventType,
+		LastRuntimeEventAt:   state.LastRuntimeEventAt,
+		RecentRuntimeEvents:  toRuntimeEventPayloads(state.RecentRuntimeEvents),
+		StartedAt:            state.StartedAt,
+		LastActiveAt:         state.UpdatedAt,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal media session state: %w", err)
@@ -69,20 +69,20 @@ func (r *RedisMediaSessionStateRepository) FindBySessionID(ctx context.Context, 
 	}
 
 	return sessionquery.MediaSessionState{
-		SessionID:             vo.SessionID(payload.SessionID),
-		ConversationID:        vo.ConversationID(payload.ConversationID),
-		UserID:                payload.UserID,
-		RoomID:                vo.RoomID(payload.RoomID),
-		Status:                vo.RoomStatus(payload.Status),
-		ConnectionState:       vo.ConnectionState(payload.ConnectionState),
-		MediaState:            vo.TrackState(payload.MediaState),
-		Participants:          payload.Participants,
-		ParticipantStates:     toMediaSessionParticipantStates(payload.ParticipantStates),
-		LastRealtimeEventType: payload.LastRealtimeEventType,
-		LastRealtimeEventAt:   payload.LastRealtimeEventAt,
-		RecentRealtimeEvents:  toRealtimeEvents(payload.RecentRealtimeEvents),
-		StartedAt:             payload.StartedAt,
-		UpdatedAt:             payload.LastActiveAt,
+		SessionID:            vo.SessionID(payload.SessionID),
+		ConversationID:       vo.ConversationID(payload.ConversationID),
+		UserID:               payload.UserID,
+		RoomID:               vo.RoomID(payload.RoomID),
+		Status:               vo.RoomStatus(payload.Status),
+		ConnectionState:      vo.ConnectionState(payload.ConnectionState),
+		MediaState:           vo.TrackState(payload.MediaState),
+		Participants:         payload.Participants,
+		ParticipantStates:    toMediaSessionParticipantStates(payload.ParticipantStates),
+		LastRuntimeEventType: payload.LastRuntimeEventType,
+		LastRuntimeEventAt:   payload.LastRuntimeEventAt,
+		RecentRuntimeEvents:  toRuntimeEvents(payload.RecentRuntimeEvents),
+		StartedAt:            payload.StartedAt,
+		UpdatedAt:            payload.LastActiveAt,
 	}, true, nil
 }
 
@@ -98,23 +98,23 @@ func mediaSessionStateKey(sessionID vo.SessionID) string {
 }
 
 type mediaSessionStatePayload struct {
-	SessionID             string                         `json:"session_id"`
-	ConversationID        string                         `json:"conversation_id"`
-	UserID                string                         `json:"user_id"`
-	RoomID                string                         `json:"room_id"`
-	Status                string                         `json:"status"`
-	ConnectionState       string                         `json:"connection_state"`
-	MediaState            string                         `json:"media_state"`
-	Participants          int                            `json:"participants"`
-	ParticipantStates     []mediaSessionParticipantState `json:"participant_states"`
-	LastRealtimeEventType string                         `json:"last_realtime_event_type,omitempty"`
-	LastRealtimeEventAt   time.Time                      `json:"last_realtime_event_at"`
-	RecentRealtimeEvents  []realtimeEventPayload         `json:"recent_realtime_events,omitempty"`
-	StartedAt             time.Time                      `json:"started_at"`
-	LastActiveAt          time.Time                      `json:"last_active_at"`
+	SessionID            string                         `json:"session_id"`
+	ConversationID       string                         `json:"conversation_id"`
+	UserID               string                         `json:"user_id"`
+	RoomID               string                         `json:"room_id"`
+	Status               string                         `json:"status"`
+	ConnectionState      string                         `json:"connection_state"`
+	MediaState           string                         `json:"media_state"`
+	Participants         int                            `json:"participants"`
+	ParticipantStates    []mediaSessionParticipantState `json:"participant_states"`
+	LastRuntimeEventType string                         `json:"last_runtime_event_type,omitempty"`
+	LastRuntimeEventAt   time.Time                      `json:"last_runtime_event_at"`
+	RecentRuntimeEvents  []runtimeEventPayload          `json:"recent_runtime_events,omitempty"`
+	StartedAt            time.Time                      `json:"started_at"`
+	LastActiveAt         time.Time                      `json:"last_active_at"`
 }
 
-type realtimeEventPayload struct {
+type runtimeEventPayload struct {
 	Type string    `json:"type"`
 	At   time.Time `json:"at"`
 }
@@ -155,10 +155,10 @@ func toMediaSessionParticipantStates(payloads []mediaSessionParticipantState) []
 	return states
 }
 
-func toRealtimeEventPayloads(events []sessionquery.RealtimeEvent) []realtimeEventPayload {
-	payloads := make([]realtimeEventPayload, 0, len(events))
+func toRuntimeEventPayloads(events []sessionquery.RuntimeEvent) []runtimeEventPayload {
+	payloads := make([]runtimeEventPayload, 0, len(events))
 	for _, event := range events {
-		payloads = append(payloads, realtimeEventPayload{
+		payloads = append(payloads, runtimeEventPayload{
 			Type: event.Type,
 			At:   event.At,
 		})
@@ -166,10 +166,10 @@ func toRealtimeEventPayloads(events []sessionquery.RealtimeEvent) []realtimeEven
 	return payloads
 }
 
-func toRealtimeEvents(payloads []realtimeEventPayload) []sessionquery.RealtimeEvent {
-	events := make([]sessionquery.RealtimeEvent, 0, len(payloads))
+func toRuntimeEvents(payloads []runtimeEventPayload) []sessionquery.RuntimeEvent {
+	events := make([]sessionquery.RuntimeEvent, 0, len(payloads))
 	for _, payload := range payloads {
-		events = append(events, sessionquery.RealtimeEvent{
+		events = append(events, sessionquery.RuntimeEvent{
 			Type: payload.Type,
 			At:   payload.At,
 		})

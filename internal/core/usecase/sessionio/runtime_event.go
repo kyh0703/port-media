@@ -2,7 +2,7 @@ package sessionio
 
 import "time"
 
-type RealtimeEventResult struct {
+type RuntimeEventResult struct {
 	Type string
 	At   time.Time
 }

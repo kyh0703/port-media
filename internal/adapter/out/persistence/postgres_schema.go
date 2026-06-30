@@ -23,11 +23,24 @@ func ensureSchema(ctx context.Context, db *bun.DB) error {
 	if _, err := createRoomsTableQuery(db).Exec(ctx); err != nil {
 		return fmt.Errorf("create rooms table: %w", err)
 	}
+	if err := ensureRoomsRuntimeEventColumns(ctx, db); err != nil {
+		return err
+	}
 
 	if _, err := createRoomsSessionIndexQuery(db).Exec(ctx); err != nil {
 		return fmt.Errorf("create rooms session index: %w", err)
 	}
 
+	return nil
+}
+
+func ensureRoomsRuntimeEventColumns(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE "rooms" ADD COLUMN IF NOT EXISTS "last_runtime_event_type" text`); err != nil {
+		return fmt.Errorf("add rooms last_runtime_event_type column: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `ALTER TABLE "rooms" ADD COLUMN IF NOT EXISTS "last_runtime_event_at" timestamptz`); err != nil {
+		return fmt.Errorf("add rooms last_runtime_event_at column: %w", err)
+	}
 	return nil
 }
 

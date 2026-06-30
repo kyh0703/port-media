@@ -11,39 +11,52 @@ import (
 )
 
 type mediaSessionProjector struct {
-	realtimeEventHistoryLimit int
+	runtimeEventHistoryLimit int
 }
 
 func (p mediaSessionProjector) Project(room entity.Room, userID string, now time.Time) sessionquery.MediaSessionState {
 	return sessionquery.MediaSessionState{
-		SessionID:         room.SessionID,
-		ConversationID:    room.ConversationID,
-		UserID:            coalesceUserID(userID, room.UserID),
-		RoomID:            room.ID,
-		Status:            room.Status,
-		ConnectionState:   roomConnectionState(room),
-		MediaState:        roomMediaState(room),
-		Participants:      room.ParticipantCount(),
-		ParticipantStates: mediaSessionParticipantStates(room),
-		StartedAt:         room.CreatedAt,
-		UpdatedAt:         now,
+		SessionID:            room.SessionID,
+		ConversationID:       room.ConversationID,
+		UserID:               coalesceUserID(userID, room.UserID),
+		RoomID:               room.ID,
+		Status:               room.Status,
+		ConnectionState:      roomConnectionState(room),
+		MediaState:           roomMediaState(room),
+		Participants:         room.ParticipantCount(),
+		ParticipantStates:    mediaSessionParticipantStates(room),
+		LastRuntimeEventType: room.LastRuntimeEventType,
+		LastRuntimeEventAt:   room.LastRuntimeEventAt,
+		StartedAt:            room.CreatedAt,
+		UpdatedAt:            now,
 	}
 }
 
-func (p mediaSessionProjector) ProjectWithRealtimeEvent(
+func (p mediaSessionProjector) ProjectWithRuntimeEvent(
 	room entity.Room,
 	userID string,
 	now time.Time,
 	eventType string,
-	recentEvents []sessionquery.RealtimeEvent,
+	recentEvents []sessionquery.RuntimeEvent,
 ) sessionquery.MediaSessionState {
 	state := p.Project(room, userID, now)
-	state.LastRealtimeEventType = eventType
-	state.LastRealtimeEventAt = now
-	state.RecentRealtimeEvents = appendRealtimeEvent(recentEvents, sessionquery.RealtimeEvent{
+	state.LastRuntimeEventType = eventType
+	state.LastRuntimeEventAt = now
+	state.RecentRuntimeEvents = appendRuntimeEvent(recentEvents, sessionquery.RuntimeEvent{
 		Type: eventType,
 		At:   now,
-	}, p.realtimeEventHistoryLimit)
+	}, p.runtimeEventHistoryLimit)
+	return state
+}
+
+func (p mediaSessionProjector) ProjectWithRuntimeEventHistory(
+	room entity.Room,
+	userID string,
+	now time.Time,
+	recentEvents []sessionquery.RuntimeEvent,
+) sessionquery.MediaSessionState {
+	state := p.Project(room, userID, now)
+	state.RecentRuntimeEvents = recentEvents
 	return state
 }
 
@@ -183,10 +196,10 @@ func participantStateResults(states []sessionquery.MediaSessionParticipantState)
 	return results
 }
 
-func realtimeEventResults(events []sessionquery.RealtimeEvent) []sessionio.RealtimeEventResult {
-	results := make([]sessionio.RealtimeEventResult, 0, len(events))
+func runtimeEventResults(events []sessionquery.RuntimeEvent) []sessionio.RuntimeEventResult {
+	results := make([]sessionio.RuntimeEventResult, 0, len(events))
 	for _, event := range events {
-		results = append(results, sessionio.RealtimeEventResult{
+		results = append(results, sessionio.RuntimeEventResult{
 			Type: event.Type,
 			At:   event.At,
 		})

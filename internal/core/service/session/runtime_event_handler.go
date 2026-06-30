@@ -2,7 +2,6 @@ package session
 
 import (
 	"context"
-	"time"
 
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/entity"
 	"github.com/kyh0703/portfoilo-media/internal/core/domain/vo"
@@ -19,8 +18,7 @@ func (s *service) HandleDataChannelMessage(ctx context.Context, message port.Dat
 	if err != nil || !found {
 		return
 	}
-	signal := s.eventsIn.Normalize(message.Payload)
-	room.RecordRealtimeEvent(string(signal.Type), now)
+	room.RecordRuntimeEvent(runtimeEventTypeDataChannelMessage, now)
 
 	if err := s.runtime.Save(ctx, room); err != nil {
 		return
@@ -29,25 +27,23 @@ func (s *service) HandleDataChannelMessage(ctx context.Context, message port.Dat
 		return
 	}
 	existingState, _, _ := s.states.FindBySessionID(ctx, message.SessionID)
-	if err := s.states.Save(ctx, s.project.ProjectWithRealtimeEvent(
+	if err := s.states.Save(ctx, s.project.ProjectWithRuntimeEvent(
 		room,
 		room.UserID,
 		now,
-		string(signal.Type),
-		existingState.RecentRealtimeEvents,
+		runtimeEventTypeDataChannelMessage,
+		existingState.RecentRuntimeEvents,
 	)); err != nil {
 		s.logRoomErrorEvent("media_session_state_save_failed", room,
-			zap.String("operation", "record_realtime_event"),
+			zap.String("operation", "record_runtime_event"),
 			zap.Error(err),
 		)
 	}
-	s.publishConversationEvent(ctx, room, signal, now)
-	s.logRoomEvent("media_realtime_event_recorded", room,
+	s.logRoomEvent("media_runtime_event_recorded", room,
 		zap.String("participant_id", string(message.ParticipantID)),
 		zap.String("participant_role", string(message.Role)),
 		zap.String("data_channel_label", message.Label),
-		zap.String("realtime_event_type", string(signal.Type)),
-		zap.String("provider_event_type", string(signal.ProviderEventType)),
+		zap.String("runtime_event_type", runtimeEventTypeDataChannelMessage),
 	)
 }
 
@@ -83,7 +79,7 @@ func (s *service) HandleConnectionStateChange(ctx context.Context, change port.C
 		)
 		return
 	}
-	if err := s.states.Save(ctx, s.project.Project(room, room.UserID, now)); err != nil {
+	if err := s.states.Save(ctx, s.projectedState(ctx, room, room.UserID, now)); err != nil {
 		s.logRoomErrorEvent("media_session_state_save_failed", room,
 			zap.String("operation", "connection_state_change"),
 			zap.Error(err),
@@ -125,34 +121,10 @@ func (s *service) HandleMediaTrackStateChange(ctx context.Context, change port.M
 		)
 		return
 	}
-	if err := s.states.Save(ctx, s.project.Project(room, room.UserID, now)); err != nil {
+	if err := s.states.Save(ctx, s.projectedState(ctx, room, room.UserID, now)); err != nil {
 		s.logRoomErrorEvent("media_session_state_save_failed", room,
 			zap.String("operation", "media_track_state_change"),
 			zap.Error(err),
-		)
-	}
-}
-
-func (s *service) publishConversationEvent(
-	ctx context.Context,
-	room entity.Room,
-	signal port.ConversationSignal,
-	occurredAt time.Time,
-) {
-	event, ok := s.eventBuilder.Build(room, signal, occurredAt)
-	if !ok {
-		return
-	}
-
-	if err := s.events.Publish(ctx, event); err != nil {
-		s.log.Warn("media_conversation_event_publish_failed",
-			zap.Error(err),
-			zap.String("session_id", string(event.SessionID)),
-			zap.String("conversation_id", string(event.ConversationID)),
-			zap.String("room_id", string(event.RoomID)),
-			zap.String("provider_call_id", event.ProviderCallID),
-			zap.String("event_type", string(event.Type)),
-			zap.String("provider_event_type", string(event.ProviderEventType)),
 		)
 	}
 }

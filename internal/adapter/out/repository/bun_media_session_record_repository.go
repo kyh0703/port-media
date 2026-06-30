@@ -29,8 +29,8 @@ func (r *BunMediaSessionRecordRepository) Save(ctx context.Context, record entit
 		Set("conversation_id = EXCLUDED.conversation_id").
 		Set("user_id = EXCLUDED.user_id").
 		Set("status = EXCLUDED.status").
-		Set("last_realtime_event_type = EXCLUDED.last_realtime_event_type").
-		Set("last_realtime_event_at = EXCLUDED.last_realtime_event_at").
+		Set("last_runtime_event_type = EXCLUDED.last_runtime_event_type").
+		Set("last_runtime_event_at = EXCLUDED.last_runtime_event_at").
 		Set("updated_at = EXCLUDED.updated_at").
 		Exec(ctx)
 	return err
@@ -63,28 +63,28 @@ func (r *BunMediaSessionRecordRepository) Delete(ctx context.Context, roomID vo.
 
 func toMediaSessionRecordModel(record entity.MediaSessionRecord) model.Room {
 	return model.Room{
-		ID:                    string(record.ID),
-		SessionID:             string(record.SessionID),
-		ConversationID:        string(record.ConversationID),
-		UserID:                record.UserID,
-		Status:                string(record.Status),
-		LastRealtimeEventType: record.LastRealtimeEventType,
-		LastRealtimeEventAt:   record.LastRealtimeEventAt,
-		CreatedAt:             record.CreatedAt,
-		UpdatedAt:             record.UpdatedAt,
+		ID:                   string(record.ID),
+		SessionID:            string(record.SessionID),
+		ConversationID:       string(record.ConversationID),
+		UserID:               record.UserID,
+		Status:               string(record.Status),
+		LastRuntimeEventType: record.LastRuntimeEventType,
+		LastRuntimeEventAt:   record.LastRuntimeEventAt,
+		CreatedAt:            record.CreatedAt,
+		UpdatedAt:            record.UpdatedAt,
 	}
 }
 
 func toMediaSessionRecord(row model.Room) entity.MediaSessionRecord {
 	return entity.MediaSessionRecord{
-		ID:                    vo.RoomID(row.ID),
-		SessionID:             vo.SessionID(row.SessionID),
-		ConversationID:        vo.ConversationID(row.ConversationID),
-		UserID:                row.UserID,
-		Status:                vo.RoomStatus(row.Status),
-		LastRealtimeEventType: row.LastRealtimeEventType,
-		LastRealtimeEventAt:   row.LastRealtimeEventAt,
-		CreatedAt:             row.CreatedAt,
-		UpdatedAt:             row.UpdatedAt,
+		ID:                   vo.RoomID(row.ID),
+		SessionID:            vo.SessionID(row.SessionID),
+		ConversationID:       vo.ConversationID(row.ConversationID),
+		UserID:               row.UserID,
+		Status:               vo.RoomStatus(row.Status),
+		LastRuntimeEventType: row.LastRuntimeEventType,
+		LastRuntimeEventAt:   row.LastRuntimeEventAt,
+		CreatedAt:            row.CreatedAt,
+		UpdatedAt:            row.UpdatedAt,
 	}
 }

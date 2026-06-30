@@ -14,20 +14,20 @@ func (s *service) GetSessionStatus(ctx context.Context, req sessionio.GetSession
 	}
 
 	return sessionio.GetSessionStatusResult{
-		SessionID:             string(state.SessionID),
-		ConversationID:        string(state.ConversationID),
-		UserID:                state.UserID,
-		RoomID:                string(state.RoomID),
-		Status:                string(state.Status),
-		ConnectionState:       string(state.ConnectionState),
-		MediaState:            string(state.MediaState),
-		Participants:          state.Participants,
-		ParticipantStates:     participantStateResults(state.ParticipantStates),
-		LastRealtimeEventType: state.LastRealtimeEventType,
-		LastRealtimeEventAt:   state.LastRealtimeEventAt,
-		RecentRealtimeEvents:  realtimeEventResults(state.RecentRealtimeEvents),
-		StartedAt:             state.StartedAt,
-		LastActiveAt:          state.UpdatedAt,
+		SessionID:            string(state.SessionID),
+		ConversationID:       string(state.ConversationID),
+		UserID:               state.UserID,
+		RoomID:               string(state.RoomID),
+		Status:               string(state.Status),
+		ConnectionState:      string(state.ConnectionState),
+		MediaState:           string(state.MediaState),
+		Participants:         state.Participants,
+		ParticipantStates:    participantStateResults(state.ParticipantStates),
+		LastRuntimeEventType: state.LastRuntimeEventType,
+		LastRuntimeEventAt:   state.LastRuntimeEventAt,
+		RecentRuntimeEvents:  runtimeEventResults(state.RecentRuntimeEvents),
+		StartedAt:            state.StartedAt,
+		LastActiveAt:         state.UpdatedAt,
 	}, true, nil
 }
 

@@ -6,20 +6,20 @@ type CreateSessionRequest struct {
 }
 
 type GetSessionStatusResponse struct {
-	SessionID             string                     `json:"session_id"`
-	ConversationID        string                     `json:"conversation_id"`
-	UserID                string                     `json:"user_id"`
-	RoomID                string                     `json:"room_id"`
-	Status                string                     `json:"status"`
-	ConnectionState       string                     `json:"connection_state"`
-	MediaState            string                     `json:"media_state"`
-	Participants          int                        `json:"participants"`
-	ParticipantStates     []ParticipantStateResponse `json:"participant_states"`
-	LastRealtimeEventType string                     `json:"last_realtime_event_type"`
-	LastRealtimeEventAt   string                     `json:"last_realtime_event_at"`
-	RecentRealtimeEvents  []RealtimeEventResponse    `json:"recent_realtime_events"`
-	StartedAt             string                     `json:"started_at"`
-	LastActiveAt          string                     `json:"last_active_at"`
+	SessionID            string                     `json:"session_id"`
+	ConversationID       string                     `json:"conversation_id"`
+	UserID               string                     `json:"user_id"`
+	RoomID               string                     `json:"room_id"`
+	Status               string                     `json:"status"`
+	ConnectionState      string                     `json:"connection_state"`
+	MediaState           string                     `json:"media_state"`
+	Participants         int                        `json:"participants"`
+	ParticipantStates    []ParticipantStateResponse `json:"participant_states"`
+	LastRuntimeEventType string                     `json:"last_runtime_event_type"`
+	LastRuntimeEventAt   string                     `json:"last_runtime_event_at"`
+	RecentRuntimeEvents  []RuntimeEventResponse     `json:"recent_runtime_events"`
+	StartedAt            string                     `json:"started_at"`
+	LastActiveAt         string                     `json:"last_active_at"`
 }
 
 type ParticipantStateResponse struct {
@@ -30,7 +30,7 @@ type ParticipantStateResponse struct {
 	Tracks          int    `json:"tracks"`
 }
 
-type RealtimeEventResponse struct {
+type RuntimeEventResponse struct {
 	Type string `json:"type"`
 	At   string `json:"at"`
 }

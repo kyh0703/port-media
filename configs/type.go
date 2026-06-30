@@ -10,7 +10,6 @@ type Config struct {
 	Database    DatabaseConfig    `envPrefix:"DATABASE_"`
 	Redis       RedisConfig       `envPrefix:"REDIS_"`
 	MediaServer MediaServerConfig `envPrefix:"MEDIA_SERVER_"`
-	Events      EventsConfig      `envPrefix:"EVENTS_"`
 	Realtime    RealtimeConfig    `envPrefix:"REALTIME_"`
 }
 
@@ -57,15 +56,9 @@ type MediaServerConfig struct {
 	MaxSessions       int           `env:"MAX_SESSIONS" envDefault:"0"`
 }
 
-type EventsConfig struct {
-	ConversationStreamEnabled bool   `env:"CONVERSATION_STREAM_ENABLED" envDefault:"true"`
-	ConversationStreamName    string `env:"CONVERSATION_STREAM_NAME" envDefault:"media:conversation-events:v1"`
-	ConversationStreamMaxLen  int64  `env:"CONVERSATION_STREAM_MAX_LEN" envDefault:"0"`
-}
-
 type RealtimeConfig struct {
-	STUNURLs                  []string      `env:"STUN_URLS" envDefault:"stun:stun.l.google.com:19302"`
-	RoomIdleTimeout           time.Duration `env:"ROOM_IDLE_TIMEOUT" envDefault:"2m"`
-	ICEGatheringTimeout       time.Duration `env:"ICE_GATHERING_TIMEOUT" envDefault:"5s"`
-	RealtimeEventHistoryLimit int           `env:"EVENT_HISTORY_LIMIT" envDefault:"10"`
+	STUNURLs                 []string      `env:"STUN_URLS" envDefault:"stun:stun.l.google.com:19302"`
+	RoomIdleTimeout          time.Duration `env:"ROOM_IDLE_TIMEOUT" envDefault:"2m"`
+	ICEGatheringTimeout      time.Duration `env:"ICE_GATHERING_TIMEOUT" envDefault:"5s"`
+	RuntimeEventHistoryLimit int           `env:"RUNTIME_EVENT_HISTORY_LIMIT" envDefault:"10"`
 }

@@ -28,7 +28,7 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://localhost:6379/2")
 	t.Setenv("MEDIA_SERVER_URL", "http://media.example.test")
 	t.Setenv("REALTIME_STUN_URLS", "stun:one.example.test:19302,stun:two.example.test:19302")
-	t.Setenv("REALTIME_EVENT_HISTORY_LIMIT", "25")
+	t.Setenv("REALTIME_RUNTIME_EVENT_HISTORY_LIMIT", "25")
 
 	cfg, err := NewConfig()
 	if err != nil {
@@ -58,8 +58,8 @@ func TestNewConfigLoadsEnvOnlyConfig(t *testing.T) {
 	if len(cfg.Realtime.STUNURLs) != 2 || cfg.Realtime.STUNURLs[0] != "stun:one.example.test:19302" {
 		t.Fatalf("STUNURLs = %#v, want env STUN URLs", cfg.Realtime.STUNURLs)
 	}
-	if cfg.Realtime.RealtimeEventHistoryLimit != 25 {
-		t.Fatalf("RealtimeEventHistoryLimit = %d, want 25", cfg.Realtime.RealtimeEventHistoryLimit)
+	if cfg.Realtime.RuntimeEventHistoryLimit != 25 {
+		t.Fatalf("RuntimeEventHistoryLimit = %d, want 25", cfg.Realtime.RuntimeEventHistoryLimit)
 	}
 }
 
