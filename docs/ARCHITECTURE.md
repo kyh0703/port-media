@@ -4,8 +4,9 @@
 
 - Records structural principles that are common to all versions.
 - Detailed designs for each version are left in `docs/vN/designs/`.
-- Defines this repository as the media plane/SFU. AI provider and agent logic
-  must run outside this repository as an agent participant.
+- Defines this repository as the media plane/SFU. WebSocket is used for
+  signaling/control; WebRTC carries the audio media path. AI provider and agent
+  logic must run outside this repository as an agent participant.
 
 ## Shared Boundaries
 
@@ -16,8 +17,9 @@
     id issuance, participant token/permission issuance, agent dispatch, durable
     persistence, and history APIs.
   - Media server: this repository owns Pion WebRTC runtime, SFU rooms,
-    participant joins, signaling, participant registry, tracks,
-    publish/subscribe, media forwarding, and live media state.
+    participant joins, WebSocket signaling/control, participant registry,
+    tracks, WebRTC media publish/subscribe, media forwarding, and live media
+    state.
   - Agent worker: owns AI provider connectivity, speech pipeline/provider
     lifecycle, transcript/tool/audit event generation, and joins media rooms as
     an agent participant.
@@ -33,8 +35,9 @@
   - Client receives API URL, media signaling URL, room/session identifiers, and
     a short-lived participant token from the API server.
   - Client sends conversation creation to the API server.
-  - Client and agent send room join/signaling directly to `port-media` with
-    participant tokens.
+  - Client and agent send room join/signaling directly to `port-media` over
+    WebSocket with participant tokens.
+  - Client and agent publish/subscribe audio through WebRTC media paths.
   - Client never receives AI provider credentials.
   - Media server never receives OpenAI API keys or other provider credentials.
   - The API server remains the durable source of truth for user ownership and
@@ -75,8 +78,8 @@
     token-permission based, not hard-coded by participant role.
   - v1 should expose structured logs for session id, room id, participant id,
     participant role, track type, connection state, and failure reason.
-  - v1 exposes authenticated single-session live status at
-    `/api/v1/sessions/:sessionId/status`, backed by Redis state.
+  - v1 exposes participant, track, and signaling state through the media
+    WebSocket signaling/control channel.
 
 ## Recommended Stack
 
@@ -84,8 +87,10 @@
 - WebRTC stack: Pion.
 - Server shape: standalone media service in this repository.
 - Client-facing conversation creation: owned by the API server.
-- Client/agent-facing media signaling: owned by `port-media`, authorized by
-  short-lived participant tokens minted by the API server.
+- Client/agent-facing signaling/control: owned by `port-media` over WebSocket,
+  authorized by short-lived participant tokens minted by the API server.
+- Client/agent-facing media transport: WebRTC audio RTP paths negotiated through
+  signaling.
 - API integration: shared Redis state lookup plus explicit room creation/control
   endpoints.
 - Provider integration: owned by an external agent worker, not by this service.
@@ -101,13 +106,13 @@
 4. The API server calls `port-media` to create or reserve the runtime room.
 5. The API server dispatches an external agent job and mints a separate agent
    participant token.
-6. Client connects to `port-media` with the user participant token and joins the
-   room.
-7. Client publishes microphone audio into the room.
-8. Agent worker connects to `port-media` with the agent participant token and
-   joins the same room.
+6. Client connects to `port-media` over WebSocket signaling/control with the
+   user participant token and joins the room.
+7. Client publishes microphone audio into the room over WebRTC.
+8. Agent worker connects to `port-media` over WebSocket signaling/control with
+   the agent participant token and joins the same room.
 9. Agent worker subscribes to user audio, connects to its AI provider, and
-   publishes assistant audio back into the room.
+   publishes assistant audio back into the room over WebRTC.
 10. `port-media` forwards audio tracks between subscribed participants.
 11. `port-media` writes live media state to Redis under
     `media:session:<session_id>`.
@@ -143,8 +148,8 @@
 ## v1 Architectural Decision
 
 - Build a Pion SFU session server, not a thin one-off WebRTC gateway.
-- Keep `port-media` limited to room join, signaling, participant registry,
-  track publish/subscribe, and media forwarding.
+- Keep `port-media` limited to room join, WebSocket signaling/control,
+  participant registry, WebRTC track publish/subscribe, and media forwarding.
 - Keep OpenAI Realtime, STT/LLM/TTS, tool calls, transcript generation, and
   provider lifecycle out of this repository.
 - Model the AI runtime as an external `agent` participant that joins the same
