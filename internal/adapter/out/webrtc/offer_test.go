@@ -35,7 +35,7 @@ func TestEngineCreatesAgentOffer(t *testing.T) {
 	}
 }
 
-func TestEngineCreatesAgentDataChannelOffer(t *testing.T) {
+func TestEngineCreatesAgentEventsDataChannelOffer(t *testing.T) {
 	engine, err := NewEngine(&configs.Config{})
 	if err != nil {
 		t.Fatalf("NewEngine() error = %v", err)
@@ -45,7 +45,7 @@ func TestEngineCreatesAgentDataChannelOffer(t *testing.T) {
 		SessionID:        vo.SessionID("session-1"),
 		ParticipantID:    vo.ParticipantID("agent-1"),
 		Role:             vo.ParticipantRoleAgent,
-		DataChannelLabel: "oai-events",
+		DataChannelLabel: "agent-events",
 	})
 	if err != nil {
 		t.Fatalf("CreateOffer() error = %v", err)
@@ -54,8 +54,8 @@ func TestEngineCreatesAgentDataChannelOffer(t *testing.T) {
 		_ = offer.Close()
 	}()
 
-	if offer.DataChannelLabel != "oai-events" {
-		t.Fatalf("DataChannelLabel = %q, want oai-events", offer.DataChannelLabel)
+	if offer.DataChannelLabel != "agent-events" {
+		t.Fatalf("DataChannelLabel = %q, want agent-events", offer.DataChannelLabel)
 	}
 	if !strings.Contains(offer.SDPOffer, "m=application") {
 		t.Fatalf("SDP offer does not include data channel application section: %s", offer.SDPOffer)
