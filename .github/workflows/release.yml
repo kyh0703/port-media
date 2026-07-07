@@ -1,0 +1,89 @@
+# 릴리즈/승격. 재빌드 없음 — main 에서 만든 sha 이미지를 재태그만 하고,
+# gitops repo(port-helm)의 env tag 를 바꾸는 PR 을 자동 생성한다.
+#
+#   v1.4.0-rc.1  (태그)  → 이미지 :1.4.0-rc.1  → staging PR
+#   v1.4.0       (태그)  → 이미지 :1.4.0       → prod PR
+#
+# 태그는 항상 main 커밋에 단다 → 그 커밋의 :sha-<commit> 이 이미 존재(build-dev.yml).
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"   # staging
+      - "v[0-9]+.[0-9]+.[0-9]+"             # prod
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  GITOPS_REPO: kyh0703/port-helm
+  SERVICE: media                            # gitops envs/<env>/<SERVICE>.yaml
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - id: img
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      # 태그 파싱: v1.4.0-rc.1 → VERSION=1.4.0-rc.1, ENV=staging / v1.4.0 → prod
+      - id: v
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"                 # 1.4.0-rc.1
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG" == *-rc.* ]]; then
+            echo "env=staging" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=prod" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 재빌드 X. main 에서 만든 sha 이미지를 새 태그로 복사(같은 digest 보장).
+      - name: retag sha image
+        run: |
+          docker buildx imagetools create \
+            -t ${{ steps.img.outputs.name }}:${{ steps.v.outputs.version }} \
+            ${{ steps.img.outputs.name }}:sha-${{ github.sha }}
+
+      # gitops repo 를 GITOPS_PAT 로 체크아웃 (GITHUB_TOKEN 은 다른 repo 못 건드림)
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_PAT }}
+          path: _gitops           # port-helm 체크아웃 위치 (repo 내부 gitops/ 와 구분)
+
+      - name: install yq
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      # envs/<env>/<svc>.yaml 의 image.tag 한 줄만 변경 → 브랜치 push → PR
+      - name: bump tag & open PR
+        working-directory: _gitops
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_PAT }}
+          ENVIRON: ${{ steps.v.outputs.env }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          FILE="gitops/envs/${ENVIRON}/${SERVICE}.yaml"
+          yq -i '.image.tag = strenv(VERSION)' "$FILE"
+
+          git config user.name  "release-bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          BR="promote/${SERVICE}-${ENVIRON}-${VERSION}"
+          git checkout -b "$BR"
+          git commit -am "promote ${SERVICE} ${VERSION} → ${ENVIRON}"
+          git push -f origin "$BR"
+
+          gh pr create --repo "${GITOPS_REPO}" --base main --head "$BR" \
+            --title "promote ${SERVICE} ${VERSION} → ${ENVIRON}" \
+            --body "port-media ${GITHUB_REF_NAME} 릴리즈에서 자동 생성. 머지하면 ArgoCD 가 ${ENVIRON} 에 반영."
