@@ -7,6 +7,7 @@ import (
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http"
 	"github.com/kyh0703/portfoilo-media/internal/adapter/in/http/middleware"
 	"github.com/kyh0703/portfoilo-media/internal/pkg/exception"
+	"github.com/kyh0703/portfoilo-media/internal/pkg/monitoring"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -18,6 +19,7 @@ type HTTPParams struct {
 
 	Config        *configs.Config
 	Logger        *zap.Logger
+	Sentry        *monitoring.Sentry
 	RequestLogger *middleware.RequestLogger
 	Recover       *middleware.RecoverMiddleware
 	Handlers      []handler.Handler `group:"handlers"`
@@ -42,6 +44,9 @@ func NewHTTPHandler(params HTTPParams) http.Handler {
 	app = middleware.CORS(params.Config.Server.CORS)(app)
 	if params.RequestLogger != nil {
 		app = params.RequestLogger.Handler(app)
+	}
+	if params.Sentry != nil {
+		app = params.Sentry.Middleware(app)
 	}
 
 	return app
