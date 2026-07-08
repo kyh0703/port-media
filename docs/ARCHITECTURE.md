@@ -1,5 +1,15 @@
 # Architecture
 
+> ⚠️ **DEPRECATED — replaced by self-hosted LiveKit.**
+>
+> `port-media` (the Pion/WebRTC SFU described below) is being superseded by the
+> self-hosted **LiveKit SFU**. In the target architecture the browser connects
+> directly to LiveKit with the LiveKit client SDK, `../api` signs LiveKit access
+> tokens and reserves rooms, and drives LiveKit server APIs (rooms, egress, SIP,
+> agent dispatch) via its `livekit` module. This repository remains only until
+> the LiveKit cutover completes and should not receive new feature work. See
+> `../api/docs/ARCHITECTURE.md` for the active architecture.
+
 ## Purpose
 
 - Records structural principles that are common to all versions.
