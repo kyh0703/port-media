@@ -11,6 +11,7 @@ type Config struct {
 	Redis       RedisConfig       `envPrefix:"REDIS_"`
 	MediaServer MediaServerConfig `envPrefix:"MEDIA_SERVER_"`
 	Realtime    RealtimeConfig    `envPrefix:"REALTIME_"`
+	Sentry      SentryConfig      `envPrefix:"SENTRY_"`
 }
 
 type AppConfig struct {
@@ -54,6 +55,10 @@ type MediaServerConfig struct {
 	HeartbeatInterval time.Duration `env:"HEARTBEAT_INTERVAL" envDefault:"10s"`
 	HeartbeatTTL      time.Duration `env:"HEARTBEAT_TTL" envDefault:"30s"`
 	MaxSessions       int           `env:"MAX_SESSIONS" envDefault:"0"`
+}
+
+type SentryConfig struct {
+	DSN string `env:"DSN"`
 }
 
 type RealtimeConfig struct {
